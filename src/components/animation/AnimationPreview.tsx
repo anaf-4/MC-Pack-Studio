@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AnimationDefinition } from '@/types/animation'
+import type { AnimationDefinition, AnimationFrame } from '@/types/animation'
 
 interface Props {
   dataURL: string
