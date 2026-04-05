@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { usePackStore } from '@/store/packStore'
 import { VersionSelector } from '@/components/setup/VersionSelector'
 import { ExportButton } from '@/components/export/ExportButton'
+import { ExportPreview } from '@/components/export/ExportPreview'
 import { usePackImport } from '@/hooks/usePackImport'
 import type { MCVersion } from '@/types/pack'
 
@@ -121,6 +122,11 @@ export function TopBar() {
       <ImportButton />
 
       <div className="w-px h-6 bg-mc-border shrink-0" />
+
+      {/* ZIP 구조 미리보기 */}
+      <div className="shrink-0">
+        <ExportPreview />
+      </div>
 
       {/* Export */}
       <div className="shrink-0">

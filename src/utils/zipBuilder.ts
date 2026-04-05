@@ -4,6 +4,22 @@ import { dataURLtoArrayBuffer, sanitizeFilename } from './imageUtils'
 import type { TextureEntry } from '@/types/texture'
 import type { AnimationDefinition } from '@/types/animation'
 
+// 항상 ZIP에 포함되는 기본 폴더 구조
+const STANDARD_FOLDERS = [
+  'assets/minecraft/textures/item',
+  'assets/minecraft/textures/block',
+  'assets/minecraft/textures/gui',
+  'assets/minecraft/textures/gui/container',
+  'assets/minecraft/textures/gui/hud',
+  'assets/minecraft/textures/entity',
+  'assets/minecraft/textures/environment',
+  'assets/minecraft/textures/font',
+  'assets/minecraft/sounds',
+  'assets/minecraft/lang',
+  'assets/minecraft/models/item',
+  'assets/minecraft/models/block',
+]
+
 interface ZipBuildOptions {
   name: string
   description: string
@@ -28,7 +44,12 @@ export async function buildResourcePackZip(opts: ZipBuildOptions): Promise<Blob>
     zip.file('pack.png', iconBuffer)
   }
 
-  // textures
+  // 기본 폴더 구조 (빈 폴더로 항상 포함)
+  for (const folder of STANDARD_FOLDERS) {
+    zip.folder(folder)
+  }
+
+  // 수정된 텍스처
   const texturePaths = Object.keys(opts.textures)
   for (let i = 0; i < texturePaths.length; i++) {
     const path = texturePaths[i]
@@ -70,12 +91,15 @@ export function getZipFileList(
   textures: Record<string, TextureEntry>,
   animations: Record<string, AnimationDefinition>,
   hasIcon: boolean,
-): string[] {
+): { folders: string[]; files: string[] } {
   const files: string[] = ['pack.mcmeta']
   if (hasIcon) files.push('pack.png')
   for (const path of Object.keys(textures)) {
     files.push(path)
     if (animations[path]) files.push(`${path}.mcmeta`)
   }
-  return files.sort()
+  return {
+    folders: STANDARD_FOLDERS,
+    files: files.sort(),
+  }
 }
