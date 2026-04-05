@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/apple/AppData/Roaming/**)",
+      "Read(//c/Users/apple/**)",
+      "Bash(cmd.exe /c \"node --version && npm --version\")",
+      "Bash(cmd.exe /c \"node --version\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(powershell.exe -Command \"node --version; npm --version\")",
+      "Read(//usr/local/**)",
+      "Read(//usr/**)"
+    ]
+  }
+}
