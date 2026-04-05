@@ -76,8 +76,9 @@ export function PixelEditor() {
   const setTexture = useTextureStore((s) => s.setTexture)
   const info = editingPath ? getTextureByPath(editingPath) : undefined
 
-  const W = info?.defaultWidth  ?? 16
-  const H = info?.defaultHeight ?? 16
+  const existing = editingPath ? textures[editingPath] : undefined
+  const W = existing?.width  ?? info?.defaultWidth  ?? 16
+  const H = existing?.height ?? info?.defaultHeight ?? 16
 
   // 오프스크린 캔버스 (실제 픽셀 데이터)
   const offRef  = useRef<HTMLCanvasElement>(null)
@@ -109,14 +110,14 @@ export function PixelEditor() {
     const ctx = off.getContext('2d')!
     ctx.clearRect(0, 0, W, H)
 
-    const existing = editingPath ? textures[editingPath] : null
-    if (existing) {
+    const existingTex = editingPath ? textures[editingPath] : null
+    if (existingTex) {
       const img = new Image()
       img.onload = () => {
-        ctx.drawImage(img, 0, 0)
+        ctx.drawImage(img, 0, 0, W, H)
         renderDisplay()
       }
-      img.src = existing.dataURL
+      img.src = existingTex.dataURL
     } else {
       renderDisplay()
     }
