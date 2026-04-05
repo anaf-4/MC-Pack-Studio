@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useTextureStore } from '@/store/textureStore'
+import { useEditorStore } from '@/store/editorStore'
 import { useTextureUpload } from '@/hooks/useTextureUpload'
 import { getTexturesByCategory } from '@/constants/texturePaths'
 import type { CSSProperties } from 'react'
@@ -130,6 +131,7 @@ function ItemDetailPanel({ path, label, width, height }: {
 }) {
   const textures = useTextureStore((s) => s.textures)
   const removeTexture = useTextureStore((s) => s.removeTexture)
+  const setEditingTexture = useEditorStore((s) => s.setEditingTexture)
   const dataURL = textures[path]?.dataURL ?? null
   const inputRef = useRef<HTMLInputElement>(null)
   const { upload, uploading, error } = useTextureUpload()
@@ -167,6 +169,14 @@ function ItemDetailPanel({ path, label, width, height }: {
           <p className="text-mc-text-muted text-xs opacity-60 mt-0.5 break-all leading-relaxed">{path}</p>
         </div>
 
+        {/* 편집 버튼 */}
+        <button
+          onClick={() => setEditingTexture(path)}
+          className="w-full text-xs border border-mc-accent rounded px-2 py-1.5 text-mc-accent hover:bg-mc-accent/10 transition-colors font-medium"
+        >
+          ✏️ 픽셀 에디터로 편집
+        </button>
+
         {dataURL ? (
           <div className="flex flex-col gap-1.5">
             <span className="text-mc-accent text-xs">● 커스텀 텍스처 적용됨</span>
@@ -176,7 +186,7 @@ function ItemDetailPanel({ path, label, width, height }: {
                 disabled={uploading}
                 className="flex-1 text-xs border border-mc-border rounded px-2 py-1 text-mc-text-secondary hover:text-mc-text-primary hover:bg-mc-bg-hover transition-colors disabled:opacity-50"
               >
-                {uploading ? '…' : '교체'}
+                {uploading ? '…' : '📁 교체'}
               </button>
               <button
                 onClick={() => removeTexture(path)}
