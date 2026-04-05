@@ -43,10 +43,20 @@ export const PACK_FORMAT_MAP: Record<MCVersion, PackFormatEntry> = {
   '1.21.1': { format: 34, supportedRange: [32, 34] },
   '1.21.2': { format: 42, supportedRange: [34, 42] },
   '1.21.3': { format: 42, supportedRange: [34, 42] },
-  '1.21.4': { format: 46, supportedRange: [42, 46] },
+  '1.21.4':  { format: 46,   supportedRange: [42, 46] },
+  '1.21.5':  { format: 55,   supportedRange: [46, 55] },
+  '1.21.6':  { format: 63,   supportedRange: [55, 63] },
+  '1.21.7':  { format: 64,   supportedRange: [63, 64] },
+  '1.21.8':  { format: 64,   supportedRange: [63, 64] },
+  '1.21.9':  { format: 69.0, supportedRange: [64, 69] },
+  '1.21.10': { format: 69.0, supportedRange: [64, 69] },
+  '1.21.11': { format: 75.0, supportedRange: [69, 75] },
+  '26.1':    { format: 84.0, supportedRange: [75, 84] },
 }
 
 export const MC_VERSIONS_ORDERED: MCVersion[] = [
+  '26.1',
+  '1.21.11', '1.21.10', '1.21.9', '1.21.8', '1.21.7', '1.21.6', '1.21.5',
   '1.21.4', '1.21.3', '1.21.2', '1.21.1', '1.21',
   '1.20.6', '1.20.5', '1.20.4', '1.20.3', '1.20.2', '1.20.1', '1.20',
   '1.19.4', '1.19.3', '1.19.2', '1.19.1', '1.19',
