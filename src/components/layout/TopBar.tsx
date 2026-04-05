@@ -2,7 +2,63 @@ import { useState } from 'react'
 import { usePackStore } from '@/store/packStore'
 import { VersionSelector } from '@/components/setup/VersionSelector'
 import { ExportButton } from '@/components/export/ExportButton'
+import { usePackImport } from '@/hooks/usePackImport'
 import type { MCVersion } from '@/types/pack'
+
+function ImportButton() {
+  const { openPicker, importZip, importing, error, result, inputRef } = usePackImport()
+  const [showResult, setShowResult] = useState(false)
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await importZip(file)
+    setShowResult(true)
+    setTimeout(() => setShowResult(false), 3000)
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={openPicker}
+        disabled={importing}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border border-mc-border text-mc-text-secondary hover:text-mc-text-primary hover:bg-mc-bg-hover disabled:opacity-50 transition-colors"
+      >
+        {importing ? (
+          <>
+            <span className="animate-spin">↻</span>
+            <span>가져오는 중…</span>
+          </>
+        ) : (
+          <>
+            <span>📂</span>
+            <span>팩 불러오기</span>
+          </>
+        )}
+      </button>
+
+      {/* 결과 토스트 */}
+      {showResult && !error && result && (
+        <div className="absolute top-full right-0 mt-2 z-50 bg-mc-bg-panel border border-mc-accent rounded px-3 py-2 text-xs text-mc-text-primary shadow-xl whitespace-nowrap">
+          ✅ <span className="text-mc-accent font-medium">{result.packName}</span> 불러오기 완료 — 텍스처 {result.textureCount}개
+        </div>
+      )}
+      {showResult && error && (
+        <div className="absolute top-full right-0 mt-2 z-50 bg-mc-bg-panel border border-mc-danger rounded px-3 py-2 text-xs text-mc-danger shadow-xl whitespace-nowrap">
+          ❌ {error}
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".zip"
+        className="hidden"
+        onChange={handleChange}
+      />
+    </div>
+  )
+}
 
 export function TopBar() {
   const { name, setName, mcVersion, setMCVersion, packFormat, description } = usePackStore()
@@ -58,6 +114,11 @@ export function TopBar() {
           format <span className="text-mc-accent font-mono">{packFormat}</span>
         </span>
       </div>
+
+      <div className="w-px h-6 bg-mc-border shrink-0" />
+
+      {/* Import */}
+      <ImportButton />
 
       <div className="w-px h-6 bg-mc-border shrink-0" />
 
