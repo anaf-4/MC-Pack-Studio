@@ -131,19 +131,30 @@ export function PixelEditor() {
     const disp = dispRef.current
     if (!off || !disp) return
     const dw = W * zoom, dh = H * zoom
-    disp.width  = dw
-    disp.height = dh
+
+    // 크기가 달라질 때만 캔버스 크기를 변경 (리셋 방지)
+    if (disp.width !== dw)  disp.width  = dw
+    if (disp.height !== dh) disp.height = dh
+
     const ctx = disp.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, dw, dh)
     ctx.drawImage(off, 0, 0, dw, dh)
 
-    // 격자
+    // 격자 — 0.5px 오프셋으로 픽셀 가장자리에 정확히 정렬
     if (showGrid && zoom >= 4) {
       ctx.strokeStyle = 'rgba(255,255,255,0.15)'
       ctx.lineWidth = 1
-      for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(x * zoom, 0); ctx.lineTo(x * zoom, dh); ctx.stroke() }
-      for (let y = 0; y <= H; y++) { ctx.beginPath(); ctx.moveTo(0, y * zoom); ctx.lineTo(dw, y * zoom); ctx.stroke() }
+      ctx.beginPath()
+      for (let x = 1; x < W; x++) {
+        ctx.moveTo(x * zoom + 0.5, 0)
+        ctx.lineTo(x * zoom + 0.5, dh)
+      }
+      for (let y = 1; y < H; y++) {
+        ctx.moveTo(0, y * zoom + 0.5)
+        ctx.lineTo(dw, y * zoom + 0.5)
+      }
+      ctx.stroke()
     }
   }, [W, H, zoom, showGrid])
 
@@ -184,7 +195,8 @@ export function PixelEditor() {
     if (!over || !shapeStart.current) return
     const [x0, y0] = shapeStart.current
     const dw = W * zoom, dh = H * zoom
-    over.width = dw; over.height = dh
+    if (over.width !== dw)  over.width  = dw
+    if (over.height !== dh) over.height = dh
     const ctx = over.getContext('2d')!
     ctx.clearRect(0, 0, dw, dh)
     ctx.strokeStyle = color
