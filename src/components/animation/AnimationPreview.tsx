@@ -12,7 +12,7 @@ export function AnimationPreview({ dataURL, frameWidth, def }: Props) {
   const [playing, setPlaying] = useState(true)
   const timerRef = useRef<number>()
 
-  const frames = def.frames.length > 0
+  const frames: AnimationFrame[] = def.frames.length > 0
     ? def.frames
     : Array.from({ length: 8 }, (_, i) => ({ index: i }))
 

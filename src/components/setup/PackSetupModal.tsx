@@ -6,7 +6,7 @@ import type { MCVersion } from '@/types/pack'
 import { validateTextureFile, fileToDataURL } from '@/utils/imageUtils'
 
 export function PackSetupModal() {
-  const { setName, setDescription, setMCVersion, setPackIcon, completeSetup, mcVersion, packFormat } = usePackStore()
+  const { setName, setDescription, setMCVersion, setPackIcon, completeSetup, mcVersion } = usePackStore()
   const [localName, setLocalName] = useState('')
   const [localDesc, setLocalDesc] = useState('')
   const [localVersion, setLocalVersion] = useState<MCVersion>(mcVersion)
