@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTextureStore } from '@/store/textureStore'
+import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 
 type GUIScreen = 'inventory' | 'chest' | 'crafting' | 'furnace'
 
@@ -20,7 +21,22 @@ const GUI_PATHS: Record<GUIScreen, string> = {
 export function GUIPreview() {
   const [active, setActive] = useState<GUIScreen>('inventory')
   const textures = useTextureStore((s) => s.textures)
-  const customTex = textures[GUI_PATHS[active]]
+
+  // 바닐라 폴백 (hooks는 항상 고정 순서로 호출)
+  const vanillaInv      = useVanillaTexture(GUI_PATHS.inventory)
+  const vanillaCrafting = useVanillaTexture(GUI_PATHS.crafting)
+  const vanillaChest    = useVanillaTexture(GUI_PATHS.chest)
+  const vanillaFurnace  = useVanillaTexture(GUI_PATHS.furnace)
+
+  const VANILLA_MAP: Record<GUIScreen, string | null> = {
+    inventory: vanillaInv,
+    crafting:  vanillaCrafting,
+    chest:     vanillaChest,
+    furnace:   vanillaFurnace,
+  }
+
+  const customTex  = textures[GUI_PATHS[active]]
+  const displayURL = customTex?.dataURL ?? VANILLA_MAP[active]
 
   return (
     <div className="flex flex-col h-full bg-mc-bg-dark">
@@ -55,10 +71,10 @@ export function GUIPreview() {
           />
 
           {/* GUI 텍스처 */}
-          {customTex ? (
+          {displayURL ? (
             <div className="relative p-4">
               <img
-                src={customTex.dataURL}
+                src={displayURL}
                 alt={active}
                 style={{
                   imageRendering: 'pixelated',
@@ -73,10 +89,13 @@ export function GUIPreview() {
           )}
         </div>
 
-        {!customTex && (
+        {!displayURL && (
           <p className="text-mc-text-muted text-xs text-center">
             GUI 탭에서 <span className="text-mc-accent">{GUI_SCREENS.find(s => s.id === active)?.label}</span> 텍스처를 업로드하면 여기에 표시됩니다
           </p>
+        )}
+        {displayURL && !customTex && (
+          <p className="text-mc-text-muted text-xs text-center opacity-50">바닐라 기본 텍스처</p>
         )}
         {customTex && (
           <p className="text-mc-text-muted text-xs">

@@ -1,4 +1,5 @@
 import { useTextureStore } from '@/store/textureStore'
+import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import {
   SIMULATOR_WIDTH,
   SIMULATOR_HEIGHT,
@@ -23,10 +24,15 @@ import {
 export function GameSimulator() {
   const textures = useTextureStore((s) => s.textures)
 
-  const heartTex    = textures[HEALTH_TEXTURE_PATH]?.dataURL   ?? null
-  const hungerTex   = textures[HUNGER_TEXTURE_PATH]?.dataURL   ?? null
-  const hotbarTex   = textures[HOTBAR_TEXTURE_PATH]?.dataURL   ?? null
-  const crosshairTex = textures[CROSSHAIR_TEXTURE_PATH]?.dataURL ?? null
+  const vanillaHeart    = useVanillaTexture(HEALTH_TEXTURE_PATH)
+  const vanillaHunger   = useVanillaTexture(HUNGER_TEXTURE_PATH)
+  const vanillaHotbar   = useVanillaTexture(HOTBAR_TEXTURE_PATH)
+  const vanillaCross    = useVanillaTexture(CROSSHAIR_TEXTURE_PATH)
+
+  const heartTex     = textures[HEALTH_TEXTURE_PATH]?.dataURL    ?? vanillaHeart
+  const hungerTex    = textures[HUNGER_TEXTURE_PATH]?.dataURL    ?? vanillaHunger
+  const hotbarTex    = textures[HOTBAR_TEXTURE_PATH]?.dataURL    ?? vanillaHotbar
+  const crosshairTex = textures[CROSSHAIR_TEXTURE_PATH]?.dataURL ?? vanillaCross
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-mc-bg-dark p-4">
