@@ -97,6 +97,7 @@ export function PixelEditor() {
 
   const [tool, setTool]       = useState<Tool>('pencil')
   const [color, setColor]     = useState('#55ff55')
+  const [hexInput, setHexInput] = useState('#55ff55')
   const [alpha, setAlpha]     = useState(255)
   const [zoom, setZoom]       = useState(16)
   const [showGrid, setShowGrid] = useState(true)
@@ -262,6 +263,11 @@ export function PixelEditor() {
   }
 
   // ── 색상 히스토리 추가 ────────────────────────────────────────────────────────
+  function applyColor(hex: string) {
+    setColor(hex)
+    setHexInput(hex)
+  }
+
   function addColorHistory(hex: string) {
     setColorHistory((prev) => {
       const next = [hex, ...prev.filter((c) => c !== hex)].slice(0, 16)
@@ -482,7 +488,7 @@ export function PixelEditor() {
         <div className="flex items-center gap-2">
           <div className="relative">
             <div
-              className="w-7 h-7 rounded border-2 border-mc-border cursor-pointer"
+              className="w-7 h-7 rounded border-2 border-mc-border cursor-pointer flex-shrink-0"
               style={{ background: `repeating-conic-gradient(#555 0% 25%, #333 0% 50%) 0 0 / 8px 8px` }}
             >
               <div
@@ -495,10 +501,32 @@ export function PixelEditor() {
               id="pixel-color-input"
               type="color"
               value={color}
-              onChange={(e) => setColor(e.target.value)}
+              onChange={(e) => { setColor(e.target.value); setHexInput(e.target.value) }}
               className="absolute opacity-0 w-0 h-0 pointer-events-none"
             />
           </div>
+
+          {/* 헥스 코드 직접 입력 */}
+          <input
+            type="text"
+            value={hexInput}
+            onChange={(e) => {
+              const v = e.target.value
+              setHexInput(v)
+              const hex = v.startsWith('#') ? v : `#${v}`
+              if (/^#[0-9a-fA-F]{6}$/.test(hex) || /^#[0-9a-fA-F]{3}$/.test(hex)) {
+                setColor(hex.length === 4
+                  ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+                  : hex
+                )
+              }
+            }}
+            onBlur={() => setHexInput(color)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur() } }}
+            placeholder="#rrggbb"
+            className="w-20 bg-mc-bg-dark border border-mc-border rounded px-2 py-1 text-xs text-mc-text-primary font-mono focus:outline-none focus:border-mc-accent"
+            spellCheck={false}
+          />
 
           {/* 투명도 */}
           <div className="flex items-center gap-1">
@@ -646,7 +674,7 @@ export function PixelEditor() {
               {palTab === 'recent' && (
                 colorHistory.length > 0
                   ? colorHistory.map((c, i) => (
-                      <button key={i} title={c} onClick={() => setColor(c)}
+                      <button key={i} title={c} onClick={() => applyColor(c)}
                         className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                         style={{ background: c }} />
                     ))
@@ -662,7 +690,7 @@ export function PixelEditor() {
                 '#f7e2a0','#e8c97a','#c8a850','#8b6914',
                 '#d4b483','#b8864e','#8b5e3c','#5c3b1e',
               ].map((c) => (
-                <button key={c} title={c} onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => applyColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                   style={{ background: c }} />
               ))}
@@ -673,7 +701,7 @@ export function PixelEditor() {
                 '#404040','#303030','#202020','#101010',
                 '#000000',
               ].map((c) => (
-                <button key={c} title={c} onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => applyColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                   style={{ background: c }} />
               ))}
@@ -685,7 +713,7 @@ export function PixelEditor() {
                 '#cc7744','#aa5533','#ff6699','#cc4477',
                 '#ffe0cc','#ffd0bb','#ffc0aa','#ffb099',
               ].map((c) => (
-                <button key={c} title={c} onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => applyColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                   style={{ background: c }} />
               ))}
@@ -699,7 +727,7 @@ export function PixelEditor() {
                 '#c8b460','#a09040','#786820','#504010',
                 '#8899aa','#667788','#445566','#223344',
               ].map((c) => (
-                <button key={c} title={c} onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => applyColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                   style={{ background: c }} />
               ))}
@@ -711,7 +739,7 @@ export function PixelEditor() {
                 '#ffff88','#88ff88','#ff8888','#8888ff',
                 '#ffffff','#cccccc','#888888','#000000',
               ].map((c) => (
-                <button key={c} title={c} onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => applyColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
                   style={{ background: c }} />
               ))}
