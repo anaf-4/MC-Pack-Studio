@@ -88,6 +88,11 @@ export function PixelEditor() {
   const dispRef = useRef<HTMLCanvasElement>(null)
   // 오버레이 캔버스 (선/사각형 미리보기)
   const overRef = useRef<HTMLCanvasElement>(null)
+  // 원본 텍스처 참조 이미지
+  const origImgRef = useRef<HTMLImageElement | null>(null)
+
+  const [showOriginal, setShowOriginal] = useState(true)
+  const [originalOpacity, setOriginalOpacity] = useState(30)
 
   const [tool, setTool]       = useState<Tool>('pencil')
   const [color, setColor]     = useState('#55ff55')
@@ -122,8 +127,9 @@ export function PixelEditor() {
         ctx.drawImage(img, 0, 0, iw, ih)
         setCanvasW(iw)
         setCanvasH(ih)
-        // 크기에 맞게 초기 줌 조정
         setZoom(iw <= 16 ? 16 : iw <= 32 ? 10 : 6)
+        // 원본 이미지 저장
+        origImgRef.current = img
         renderDisplay()
       }
       img.src = existingTex.dataURL
@@ -137,6 +143,7 @@ export function PixelEditor() {
       setCanvasW(dw)
       setCanvasH(dh)
       setZoom(dw <= 16 ? 16 : dw <= 32 ? 10 : 6)
+      origImgRef.current = null
       renderDisplay()
     }
     setUndoStack([])
@@ -158,6 +165,14 @@ export function PixelEditor() {
     const ctx = disp.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, dw, dh)
+
+    // 원본 텍스처를 반투명 배경으로 표시
+    if (showOriginal && origImgRef.current) {
+      ctx.globalAlpha = originalOpacity / 100
+      ctx.drawImage(origImgRef.current, 0, 0, dw, dh)
+      ctx.globalAlpha = 1.0
+    }
+
     ctx.drawImage(off, 0, 0, dw, dh)
 
     // 격자 — 0.5px 오프셋으로 픽셀 가장자리에 정확히 정렬
@@ -175,7 +190,7 @@ export function PixelEditor() {
       }
       ctx.stroke()
     }
-  }, [W, H, zoom, showGrid])
+  }, [W, H, zoom, showGrid, showOriginal, originalOpacity])
 
   useEffect(() => { renderDisplay() }, [renderDisplay])
 
@@ -523,6 +538,31 @@ export function PixelEditor() {
           <button onClick={() => setZoom((z) => Math.max(2, z - 2))} className="w-6 h-6 rounded border border-mc-border text-mc-text-secondary hover:bg-mc-bg-hover text-xs">−</button>
           <span className="text-mc-text-muted text-xs font-mono w-8 text-center">{zoom}×</span>
           <button onClick={() => setZoom((z) => Math.min(32, z + 2))} className="w-6 h-6 rounded border border-mc-border text-mc-text-secondary hover:bg-mc-bg-hover text-xs">+</button>
+        </div>
+
+        <div className="w-px h-5 bg-mc-border" />
+
+        {/* 원본 오버레이 */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowOriginal((v) => !v)}
+            title="원본 텍스처 배경 표시"
+            className={`px-2 py-1 rounded text-xs border transition-colors ${
+              showOriginal
+                ? 'border-mc-accent text-mc-accent bg-mc-accent/10'
+                : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'
+            }`}
+          >원본</button>
+          {showOriginal && (
+            <input
+              type="range"
+              min={5} max={80}
+              value={originalOpacity}
+              onChange={(e) => setOriginalOpacity(Number(e.target.value))}
+              className="w-14 h-1.5 accent-mc-accent"
+              title={`원본 불투명도 ${originalOpacity}%`}
+            />
+          )}
         </div>
 
         <div className="w-px h-5 bg-mc-border" />
