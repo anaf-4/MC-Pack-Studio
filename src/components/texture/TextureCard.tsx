@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTextureStore } from '@/store/textureStore'
 import { useEditorStore } from '@/store/editorStore'
+import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import { TextureDropZone } from './TextureDropZone'
 import type { TexturePathInfo } from '@/types/texture'
 
@@ -13,10 +14,12 @@ export function TextureCard({ info }: Props) {
   const removeTexture = useTextureStore((s) => s.removeTexture)
   const selectedPath = useEditorStore((s) => s.selectedTexturePath)
   const selectTexture = useEditorStore((s) => s.selectTexture)
+  const vanillaDataURL = useVanillaTexture(info.path)
   const [showDrop, setShowDrop] = useState(false)
 
   const isSelected = selectedPath === info.path
   const isModified = !!texture
+  const displayURL = texture?.dataURL ?? vanillaDataURL
 
   return (
     <div
@@ -29,9 +32,9 @@ export function TextureCard({ info }: Props) {
     >
       {/* Texture preview */}
       <div className="aspect-square bg-[#1a1a1a] bg-[repeating-conic-gradient(#2a2a2a_0%_25%,#1a1a1a_0%_50%)] bg-[length:16px_16px] rounded flex items-center justify-center overflow-hidden relative">
-        {isModified ? (
+        {displayURL ? (
           <img
-            src={texture.dataURL}
+            src={displayURL}
             alt={info.label}
             className="w-full h-full object-contain"
             style={{ imageRendering: 'pixelated' }}
