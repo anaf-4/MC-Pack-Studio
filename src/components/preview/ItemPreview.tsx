@@ -275,57 +275,251 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
   )
 }
 
-// ── 아이템 추가 모달 ──────────────────────────────────────────────────────────
-function AddItemModal({ onAdd, onClose }: { onAdd: (item: CustomItem) => void; onClose: () => void }) {
-  const [label, setLabel] = useState('')
-  const [pathSuffix, setPathSuffix] = useState('')
+// ── 모달 내장 미니 픽셀 에디터 ───────────────────────────────────────────────
+const MINI_W = 16, MINI_H = 16, MINI_ZOOM = 14
 
-  const fullPath = `assets/minecraft/textures/item/${pathSuffix.replace(/\.png$/i, '')}.png`
+function MiniPixelEditor({ onDataURL }: { onDataURL: (url: string | null) => void }) {
+  const [rgba, setRgba]   = useState<Uint8ClampedArray>(() => new Uint8ClampedArray(MINI_W * MINI_H * 4))
+  const [color, setColor] = useState('#55ff55')
+  const [alpha, setAlpha] = useState(255)
+  const [tool,  setTool]  = useState<'pencil' | 'eraser'>('pencil')
+  const [down,  setDown]  = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // 캔버스에 현재 픽셀 그리기
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, MINI_W * MINI_ZOOM, MINI_H * MINI_ZOOM)
+    // 체커보드 배경
+    for (let y = 0; y < MINI_H; y++) for (let x = 0; x < MINI_W; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#2a2a2a' : '#222'
+      ctx.fillRect(x * MINI_ZOOM, y * MINI_ZOOM, MINI_ZOOM, MINI_ZOOM)
+    }
+    // 픽셀
+    const id = new ImageData(MINI_W, MINI_H)
+    id.data.set(rgba)
+    const off = document.createElement('canvas')
+    off.width = MINI_W; off.height = MINI_H
+    off.getContext('2d')!.putImageData(id, 0, 0)
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(off, 0, 0, MINI_W * MINI_ZOOM, MINI_H * MINI_ZOOM)
+    // 그리드
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.5
+    for (let x = 0; x <= MINI_W; x++) { ctx.beginPath(); ctx.moveTo(x * MINI_ZOOM, 0); ctx.lineTo(x * MINI_ZOOM, MINI_H * MINI_ZOOM); ctx.stroke() }
+    for (let y = 0; y <= MINI_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * MINI_ZOOM); ctx.lineTo(MINI_W * MINI_ZOOM, y * MINI_ZOOM); ctx.stroke() }
+    // dataURL 출력
+    const off2 = document.createElement('canvas'); off2.width = MINI_W; off2.height = MINI_H
+    off2.getContext('2d')!.putImageData(id, 0, 0)
+    const hasPixel = rgba.some((v, i) => i % 4 === 3 && v > 0)
+    onDataURL(hasPixel ? off2.toDataURL('image/png') : null)
+  }, [rgba])
+
+  function applyPixel(ex: number, ey: number) {
+    const canvas = canvasRef.current; if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const px = Math.floor((ex - rect.left) / MINI_ZOOM)
+    const py = Math.floor((ey - rect.top) / MINI_ZOOM)
+    if (px < 0 || py < 0 || px >= MINI_W || py >= MINI_H) return
+    const next = new Uint8ClampedArray(rgba)
+    const i = (py * MINI_W + px) * 4
+    if (tool === 'eraser') {
+      next[i] = next[i+1] = next[i+2] = next[i+3] = 0
+    } else {
+      const r = parseInt(color.slice(1,3),16)
+      const g = parseInt(color.slice(3,5),16)
+      const b = parseInt(color.slice(5,7),16)
+      next[i]=r; next[i+1]=g; next[i+2]=b; next[i+3]=alpha
+    }
+    setRgba(next)
+  }
+
+  function clear() { setRgba(new Uint8ClampedArray(MINI_W * MINI_H * 4)) }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* 도구 모음 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {(['pencil','eraser'] as const).map(t => (
+          <button key={t} onClick={() => setTool(t)}
+            className={`px-2 py-1 rounded text-xs border transition-colors ${tool===t ? 'border-mc-accent text-mc-accent bg-mc-accent/10' : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'}`}>
+            {t === 'pencil' ? '✏️ 연필' : '🧹 지우개'}
+          </button>
+        ))}
+        <input type="color" value={color} onChange={e => setColor(e.target.value)}
+          className="w-7 h-7 rounded cursor-pointer border border-mc-border bg-transparent p-0.5" title="색상" />
+        <div className="flex items-center gap-1 flex-1">
+          <span className="text-mc-text-muted text-xs shrink-0">투명도</span>
+          <input type="range" min={0} max={255} value={alpha} onChange={e => setAlpha(+e.target.value)}
+            className="flex-1 accent-mc-accent" />
+        </div>
+        <button onClick={clear} className="px-2 py-1 rounded text-xs border border-mc-border text-mc-danger hover:bg-mc-bg-hover">초기화</button>
+      </div>
+      {/* 픽셀 캔버스 */}
+      <canvas
+        ref={canvasRef}
+        width={MINI_W * MINI_ZOOM}
+        height={MINI_H * MINI_ZOOM}
+        style={{ imageRendering: 'pixelated', cursor: tool === 'eraser' ? 'cell' : 'crosshair', border: '1px solid #444', borderRadius: 4 }}
+        onMouseDown={e => { setDown(true); applyPixel(e.clientX, e.clientY) }}
+        onMouseMove={e => { if (down) applyPixel(e.clientX, e.clientY) }}
+        onMouseUp={() => setDown(false)}
+        onMouseLeave={() => setDown(false)}
+      />
+    </div>
+  )
+}
+
+// ── 아이템 추가 모달 (직접 그리기 + PNG 업로드) ────────────────────────────────
+function AddItemModal({ onAdd, onClose }: {
+  onAdd: (item: CustomItem, dataURL: string | null, w: number, h: number) => void
+  onClose: () => void
+}) {
+  const [label,      setLabel]      = useState('')
+  const [pathSuffix, setPathSuffix] = useState('')
+  const [mode,       setMode]       = useState<'draw' | 'upload'>('draw')
+  const [drawnURL,   setDrawnURL]   = useState<string | null>(null)
+  const [uploadURL,  setUploadURL]  = useState<string | null>(null)
+  const [imgError,   setImgError]   = useState<string | null>(null)
+  const [dragging,   setDragging]   = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const activeURL  = mode === 'draw' ? drawnURL : uploadURL
+  const autoSuffix = label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'my_item'
+  const usedSuffix = pathSuffix.trim() || autoSuffix
+  const fullPath   = `assets/minecraft/textures/item/${usedSuffix.replace(/\.png$/i, '')}.png`
+
+  async function handleFile(file: File) {
+    setImgError(null)
+    if (file.type !== 'image/png') { setImgError('PNG 파일만 가능합니다.'); return }
+    if (file.size > 4 * 1024 * 1024) { setImgError('4MB 이하 파일만 가능합니다.'); return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result as string
+      const img = new Image()
+      img.onload = () => {
+        const { naturalWidth: w, naturalHeight: h } = img
+        if (w <= 0 || h <= 0 || (w & (w-1)) || (h & (h-1))) {
+          setImgError(`크기가 2의 거듭제곱이어야 합니다 (16×16, 32×32 등). 현재: ${w}×${h}`); return
+        }
+        setUploadURL(url)
+        if (!pathSuffix.trim()) setPathSuffix(file.name.replace(/\.png$/i, ''))
+        if (!label.trim())      setLabel(file.name.replace(/\.png$/i, '').replace(/_/g, ' '))
+      }
+      img.src = url
+    }
+    reader.readAsDataURL(file)
+  }
 
   function handleSubmit() {
-    if (!label.trim() || !pathSuffix.trim()) return
-    onAdd({ id: `custom_item_${Date.now()}`, label: label.trim(), path: fullPath })
+    if (!label.trim()) return
+    onAdd(
+      { id: `custom_item_${Date.now()}`, label: label.trim(), path: fullPath },
+      activeURL,
+      MINI_W, MINI_H,
+    )
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-mc-bg-panel border border-mc-border rounded-xl p-6 w-96 flex flex-col gap-4 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-mc-text-primary font-bold text-sm">아이템 추가</h2>
-          <button onClick={onClose} className="text-mc-text-muted hover:text-mc-text-secondary text-lg">✕</button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-mc-bg-panel border border-mc-border rounded-xl shadow-2xl flex flex-col" style={{ width: 560, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="p-5 flex flex-col gap-4">
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-mc-text-muted text-xs">아이템 이름</label>
-          <input type="text" value={label} onChange={e => setLabel(e.target.value)}
-            placeholder="예: 나만의 아이템"
-            className="bg-mc-bg-dark border border-mc-border rounded px-3 py-1.5 text-sm text-mc-text-primary focus:outline-none focus:border-mc-accent" />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-mc-text-muted text-xs">파일명 <span className="opacity-60">(확장자 없어도 됨)</span></label>
-          <div className="flex items-center gap-1.5">
-            <span className="text-mc-text-muted text-xs opacity-60 shrink-0">…/item/</span>
-            <input type="text" value={pathSuffix} onChange={e => setPathSuffix(e.target.value)}
-              placeholder="my_item"
-              className="flex-1 bg-mc-bg-dark border border-mc-border rounded px-3 py-1.5 text-sm text-mc-text-primary focus:outline-none focus:border-mc-accent" />
-            <span className="text-mc-text-muted text-xs opacity-60 shrink-0">.png</span>
+          {/* 헤더 */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-mc-text-primary font-bold text-sm">🗡️ 커스텀 아이템 추가</h2>
+            <button onClick={onClose} className="text-mc-text-muted hover:text-mc-text-secondary text-lg leading-none">✕</button>
           </div>
-          {pathSuffix && (
-            <p className="text-mc-text-muted text-xs font-mono opacity-60 break-all">{fullPath}</p>
-          )}
-        </div>
 
-        <div className="flex gap-2 pt-1">
-          <button onClick={handleSubmit} disabled={!label.trim() || !pathSuffix.trim()}
-            className="flex-1 bg-mc-accent hover:bg-mc-accent-hover disabled:opacity-40 text-black font-bold py-1.5 rounded text-sm transition-colors">
-            추가
-          </button>
-          <button onClick={onClose}
-            className="px-4 border border-mc-border rounded text-mc-text-secondary hover:bg-mc-bg-hover text-sm transition-colors">
-            취소
-          </button>
+          {/* 모드 탭 */}
+          <div className="flex rounded-lg overflow-hidden border border-mc-border">
+            {(['draw','upload'] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`flex-1 py-2 text-xs font-semibold transition-colors ${mode===m ? 'bg-mc-accent text-black' : 'text-mc-text-muted hover:bg-mc-bg-hover'}`}>
+                {m === 'draw' ? '✏️ 직접 그리기' : '📁 PNG 업로드'}
+              </button>
+            ))}
+          </div>
+
+          {/* 본문 */}
+          {mode === 'draw' ? (
+            <div className="flex gap-4">
+              {/* 미니 픽셀 에디터 */}
+              <MiniPixelEditor onDataURL={setDrawnURL} />
+              {/* 실시간 3D 미리보기 */}
+              <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                <span className="text-mc-text-muted text-xs">3D 미리보기</span>
+                <div className="flex items-center justify-center rounded-lg"
+                  style={{ width: 160, height: 120, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #08101a 100%)', border: '1px solid #333' }}>
+                  <Item3D dataURL={drawnURL} canvasW={154} canvasH={110} />
+                </div>
+                {!drawnURL && <p className="text-mc-text-muted text-xs opacity-50 text-center">픽셀을 그리면<br/>여기 3D로 보입니다</p>}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+                className={`flex items-center justify-center rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                  dragging ? 'border-mc-accent bg-mc-accent/10' : 'border-mc-border bg-mc-bg-dark hover:border-mc-accent/40'
+                }`}
+                style={{ height: 140 }}
+              >
+                {uploadURL ? (
+                  <Item3D dataURL={uploadURL} canvasW={240} canvasH={130} />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-mc-text-muted select-none">
+                    <span className="text-4xl opacity-30">🖼️</span>
+                    <span className="text-xs">PNG 드래그 또는 클릭</span>
+                    <span className="text-xs opacity-50">16×16 · 32×32 · 64×64 등</span>
+                  </div>
+                )}
+              </div>
+              {imgError && <p className="text-mc-danger text-xs mt-1">⚠ {imgError}</p>}
+              <input ref={fileRef} type="file" accept="image/png" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+            </div>
+          )}
+
+          {/* 이름 */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-mc-text-secondary text-xs font-semibold">아이템 이름 <span className="text-mc-danger">*</span></label>
+            <input type="text" value={label} onChange={e => setLabel(e.target.value)}
+              placeholder="예: 마법의 검" autoFocus
+              className="bg-mc-bg-dark border border-mc-border rounded px-3 py-2 text-sm text-mc-text-primary focus:outline-none focus:border-mc-accent placeholder:text-mc-text-muted" />
+          </div>
+
+          {/* 경로 */}
+          <div className="flex flex-col gap-1">
+            <label className="text-mc-text-secondary text-xs font-semibold">
+              경로 <span className="text-mc-text-muted font-normal">(선택 · 비우면 자동)</span>
+            </label>
+            <div className="flex items-center gap-1 font-mono text-xs text-mc-text-muted">
+              <span className="opacity-50 shrink-0">item/</span>
+              <input type="text" value={pathSuffix} onChange={e => setPathSuffix(e.target.value)}
+                placeholder={autoSuffix}
+                className="flex-1 bg-mc-bg-dark border border-mc-border rounded px-2 py-1.5 text-mc-text-primary focus:outline-none focus:border-mc-accent placeholder:text-mc-text-muted" />
+              <span className="opacity-50 shrink-0">.png</span>
+            </div>
+            <p className="text-mc-text-muted text-xs opacity-40 font-mono break-all">{fullPath}</p>
+          </div>
+
+          {/* 추가 버튼 */}
+          <div className="flex gap-2">
+            <button onClick={handleSubmit} disabled={!label.trim()}
+              className="flex-1 bg-mc-accent hover:bg-mc-accent-hover disabled:opacity-40 text-black font-bold py-2 rounded text-sm transition-colors">
+              {activeURL ? '✅ 아이템 추가' : '아이템 추가 (텍스처 없음)'}
+            </button>
+            <button onClick={onClose}
+              className="px-4 border border-mc-border rounded text-mc-text-secondary hover:bg-mc-bg-hover text-sm">
+              취소
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
@@ -335,6 +529,7 @@ function AddItemModal({ onAdd, onClose }: { onAdd: (item: CustomItem) => void; o
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 export function ItemPreview() {
   const textures     = useTextureStore(s => s.textures)
+  const setTexture   = useTextureStore(s => s.setTexture)
   const builtInItems = getTexturesByCategory('item')
   const [customItems, setCustomItems]   = useState<CustomItem[]>(loadCustomItems)
   const [selected, setSelected]         = useState<string | null>(null)
@@ -358,9 +553,18 @@ export function ItemPreview() {
   const selectedItem = allItems.find(i => i.path === selected)
   const modifiedCount = allItems.filter(i => !!textures[i.path]).length
 
-  function addCustomItem(item: CustomItem) {
+  function addCustomItem(item: CustomItem, dataURL: string | null, w: number, h: number) {
     const next = [...customItems, item]
     setCustomItems(next); saveCustomItems(next)
+    if (dataURL) {
+      setTexture(item.path, {
+        path: item.path, dataURL,
+        width: w, height: h,
+        fileName: `${item.path.split('/').pop() ?? 'item.png'}`,
+        uploadedAt: Date.now(),
+      })
+    }
+    setSelected(item.path)
   }
   function deleteCustomItem(id: string) {
     const next = customItems.filter(i => i.id !== id)
@@ -445,7 +649,10 @@ export function ItemPreview() {
       </div>
 
       {showAddModal && (
-        <AddItemModal onAdd={addCustomItem} onClose={() => setShowAddModal(false)} />
+        <AddItemModal
+          onAdd={(item, dataURL, w, h) => addCustomItem(item, dataURL, w, h)}
+          onClose={() => setShowAddModal(false)}
+        />
       )}
     </div>
   )
