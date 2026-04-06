@@ -88,11 +88,12 @@ export function PixelEditor() {
   const dispRef = useRef<HTMLCanvasElement>(null)
   // 오버레이 캔버스 (선/사각형 미리보기)
   const overRef = useRef<HTMLCanvasElement>(null)
-  // 원본 텍스처 참조 이미지
-  const origImgRef = useRef<HTMLImageElement | null>(null)
+  // 바닐라(기본) 텍스처 참조 이미지
+  const vanillaImgRef = useRef<HTMLImageElement | null>(null)
 
   const [showOriginal, setShowOriginal] = useState(true)
   const [originalOpacity, setOriginalOpacity] = useState(30)
+  const [palTab, setPalTab] = useState<'recent' | 'mc' | 'gray' | 'skin' | 'nature' | 'neon'>('mc')
 
   const [tool, setTool]       = useState<Tool>('pencil')
   const [color, setColor]     = useState('#55ff55')
@@ -113,11 +114,23 @@ export function PixelEditor() {
     const off = offRef.current
     if (!off) return
 
+    const dw = info?.defaultWidth  ?? 16
+    const dh = info?.defaultHeight ?? 16
+
+    // 바닐라 기본 텍스처 로드 (public/vanilla/ 경로)
+    vanillaImgRef.current = null
+    if (editingPath) {
+      const vanillaUrl = `${import.meta.env.BASE_URL}vanilla/${editingPath}`
+      const vimg = new Image()
+      vimg.onload = () => { vanillaImgRef.current = vimg; renderDisplay() }
+      vimg.onerror = () => { vanillaImgRef.current = null }
+      vimg.src = vanillaUrl
+    }
+
     const existingTex = editingPath ? textures[editingPath] : null
     if (existingTex) {
       const img = new Image()
       img.onload = () => {
-        // 실제 이미지 크기를 읽어 캔버스 크기 결정 (최대 64×64)
         const iw = Math.min(img.naturalWidth,  64)
         const ih = Math.min(img.naturalHeight, 64)
         off.width  = iw
@@ -128,14 +141,10 @@ export function PixelEditor() {
         setCanvasW(iw)
         setCanvasH(ih)
         setZoom(iw <= 16 ? 16 : iw <= 32 ? 10 : 6)
-        // 원본 이미지 저장
-        origImgRef.current = img
         renderDisplay()
       }
       img.src = existingTex.dataURL
     } else {
-      const dw = info?.defaultWidth  ?? 16
-      const dh = info?.defaultHeight ?? 16
       off.width  = dw
       off.height = dh
       const ctx = off.getContext('2d')!
@@ -143,7 +152,6 @@ export function PixelEditor() {
       setCanvasW(dw)
       setCanvasH(dh)
       setZoom(dw <= 16 ? 16 : dw <= 32 ? 10 : 6)
-      origImgRef.current = null
       renderDisplay()
     }
     setUndoStack([])
@@ -166,10 +174,10 @@ export function PixelEditor() {
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, dw, dh)
 
-    // 원본 텍스처를 반투명 배경으로 표시
-    if (showOriginal && origImgRef.current) {
+    // 바닐라 기본 텍스처를 반투명 배경으로 표시
+    if (showOriginal && vanillaImgRef.current) {
       ctx.globalAlpha = originalOpacity / 100
-      ctx.drawImage(origImgRef.current, 0, 0, dw, dh)
+      ctx.drawImage(vanillaImgRef.current, 0, 0, dw, dh)
       ctx.globalAlpha = 1.0
     }
 
@@ -608,45 +616,104 @@ export function PixelEditor() {
         </div>
 
         {/* 오른쪽 사이드: 색상 팔레트 + 미리보기 */}
-        <div className="w-36 flex-shrink-0 border-l border-mc-border flex flex-col bg-mc-bg-panel overflow-y-auto">
-          {/* 색상 히스토리 */}
-          <div className="p-2 border-b border-mc-border">
-            <p className="text-mc-text-muted text-xs mb-1.5">사용한 색상</p>
-            <div className="grid grid-cols-4 gap-1">
-              {colorHistory.map((c, i) => (
-                <button
-                  key={i}
-                  title={c}
-                  onClick={() => setColor(c)}
-                  className={`w-6 h-6 rounded border ${color === c ? 'border-mc-accent' : 'border-mc-border'}`}
-                  style={{ background: c }}
-                />
-              ))}
-              {colorHistory.length === 0 && (
-                <span className="col-span-4 text-mc-text-muted text-xs opacity-60">없음</span>
-              )}
-            </div>
+        <div className="w-40 flex-shrink-0 border-l border-mc-border flex flex-col bg-mc-bg-panel overflow-y-auto">
+
+          {/* 팔레트 탭 */}
+          <div className="flex flex-wrap gap-0.5 p-1.5 border-b border-mc-border">
+            {([
+              ['recent', '최근'],
+              ['mc',     'MC'],
+              ['gray',   '회색'],
+              ['skin',   '스킨'],
+              ['nature', '자연'],
+              ['neon',   '네온'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPalTab(id)}
+                className={`px-1.5 py-0.5 rounded text-xs transition-colors ${
+                  palTab === id
+                    ? 'bg-mc-accent text-black font-bold'
+                    : 'text-mc-text-muted hover:text-mc-text-secondary'
+                }`}
+              >{label}</button>
+            ))}
           </div>
 
-          {/* 마인크래프트 기본 팔레트 */}
+          {/* 팔레트 컨텐츠 */}
           <div className="p-2 border-b border-mc-border">
-            <p className="text-mc-text-muted text-xs mb-1.5">MC 팔레트</p>
             <div className="grid grid-cols-4 gap-1">
-              {[
+              {palTab === 'recent' && (
+                colorHistory.length > 0
+                  ? colorHistory.map((c, i) => (
+                      <button key={i} title={c} onClick={() => setColor(c)}
+                        className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
+                        style={{ background: c }} />
+                    ))
+                  : [<span key="empty" className="col-span-4 text-mc-text-muted text-xs opacity-60">없음</span>]
+              )}
+              {palTab === 'mc' && [
                 '#ffffff','#dddddd','#aaaaaa','#555555',
                 '#222222','#000000','#ff5555','#ff0000',
                 '#ffaa00','#ffff55','#55ff55','#00aa00',
                 '#55ffff','#00aaaa','#5555ff','#0000aa',
                 '#ff55ff','#aa00aa','#aa7700','#6a3a1a',
                 '#3a5e1f','#1a3a5e','#7a1a2e','#c66600',
+                '#f7e2a0','#e8c97a','#c8a850','#8b6914',
+                '#d4b483','#b8864e','#8b5e3c','#5c3b1e',
               ].map((c) => (
-                <button
-                  key={c}
-                  title={c}
-                  onClick={() => setColor(c)}
+                <button key={c} title={c} onClick={() => setColor(c)}
                   className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
-                  style={{ background: c }}
-                />
+                  style={{ background: c }} />
+              ))}
+              {palTab === 'gray' && [
+                '#ffffff','#f0f0f0','#e0e0e0','#d0d0d0',
+                '#c0c0c0','#b0b0b0','#a0a0a0','#909090',
+                '#808080','#707070','#606060','#505050',
+                '#404040','#303030','#202020','#101010',
+                '#000000',
+              ].map((c) => (
+                <button key={c} title={c} onClick={() => setColor(c)}
+                  className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
+                  style={{ background: c }} />
+              ))}
+              {palTab === 'skin' && [
+                '#ffdfc4','#f0c8a0','#e8b88a','#d4a574',
+                '#c8956c','#b87c5a','#a0644a','#8b5040',
+                '#7a3c30','#603028','#4a2020','#3a1a18',
+                '#ffccaa','#ffb899','#ff9977','#ff8855',
+                '#cc7744','#aa5533','#ff6699','#cc4477',
+                '#ffe0cc','#ffd0bb','#ffc0aa','#ffb099',
+              ].map((c) => (
+                <button key={c} title={c} onClick={() => setColor(c)}
+                  className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
+                  style={{ background: c }} />
+              ))}
+              {palTab === 'nature' && [
+                '#55ff55','#44dd44','#33bb33','#229922',
+                '#117711','#005500','#88ff44','#66dd22',
+                '#44bb00','#226600','#ffff44','#dddd22',
+                '#bbbb00','#888800','#ff8844','#dd6622',
+                '#bb4400','#7a2200','#44bbff','#2299dd',
+                '#0077bb','#005599','#885533','#663311',
+                '#c8b460','#a09040','#786820','#504010',
+                '#8899aa','#667788','#445566','#223344',
+              ].map((c) => (
+                <button key={c} title={c} onClick={() => setColor(c)}
+                  className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
+                  style={{ background: c }} />
+              ))}
+              {palTab === 'neon' && [
+                '#ff0080','#ff0040','#ff4000','#ff8000',
+                '#ffff00','#80ff00','#00ff00','#00ff80',
+                '#00ffff','#0080ff','#0000ff','#8000ff',
+                '#ff00ff','#ff0088','#ff88ff','#88ffff',
+                '#ffff88','#88ff88','#ff8888','#8888ff',
+                '#ffffff','#cccccc','#888888','#000000',
+              ].map((c) => (
+                <button key={c} title={c} onClick={() => setColor(c)}
+                  className={`w-6 h-6 rounded border ${color === c ? 'border-white' : 'border-mc-border'}`}
+                  style={{ background: c }} />
               ))}
             </div>
           </div>
