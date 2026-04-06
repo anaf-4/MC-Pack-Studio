@@ -276,69 +276,78 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
 }
 
 // ── 모달 내장 미니 픽셀 에디터 ───────────────────────────────────────────────
-const MINI_W = 16, MINI_H = 16, MINI_ZOOM = 14
+const CANVAS_PX = 224   // 화면상 고정 크기 (px)
+const MINI_SIZES = [8, 16, 32, 64] as const
 
-function MiniPixelEditor({ onDataURL }: { onDataURL: (url: string | null) => void }) {
-  const [rgba, setRgba]   = useState<Uint8ClampedArray>(() => new Uint8ClampedArray(MINI_W * MINI_H * 4))
+function MiniPixelEditor({ size, onDataURL }: {
+  size: number
+  onDataURL: (url: string | null) => void
+}) {
+  const zoom = Math.max(2, Math.floor(CANVAS_PX / size))
+  const [rgba, setRgba]   = useState<Uint8ClampedArray>(() => new Uint8ClampedArray(size * size * 4))
   const [color, setColor] = useState('#55ff55')
   const [alpha, setAlpha] = useState(255)
   const [tool,  setTool]  = useState<'pencil' | 'eraser'>('pencil')
   const [down,  setDown]  = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // 캔버스에 현재 픽셀 그리기
+  // 크기가 바뀌면 버퍼 초기화
+  useEffect(() => {
+    setRgba(new Uint8ClampedArray(size * size * 4))
+  }, [size])
+
+  // 캔버스 렌더
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return
+    const W = size, H = size
     const ctx = canvas.getContext('2d')!
-    ctx.clearRect(0, 0, MINI_W * MINI_ZOOM, MINI_H * MINI_ZOOM)
-    // 체커보드 배경
-    for (let y = 0; y < MINI_H; y++) for (let x = 0; x < MINI_W; x++) {
-      ctx.fillStyle = (x + y) % 2 === 0 ? '#2a2a2a' : '#222'
-      ctx.fillRect(x * MINI_ZOOM, y * MINI_ZOOM, MINI_ZOOM, MINI_ZOOM)
+    ctx.clearRect(0, 0, W * zoom, H * zoom)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#2a2a2a' : '#1e1e1e'
+      ctx.fillRect(x * zoom, y * zoom, zoom, zoom)
     }
-    // 픽셀
-    const id = new ImageData(MINI_W, MINI_H)
+    const id = new ImageData(W, H)
     id.data.set(rgba)
-    const off = document.createElement('canvas')
-    off.width = MINI_W; off.height = MINI_H
+    const off = document.createElement('canvas'); off.width = W; off.height = H
     off.getContext('2d')!.putImageData(id, 0, 0)
     ctx.imageSmoothingEnabled = false
-    ctx.drawImage(off, 0, 0, MINI_W * MINI_ZOOM, MINI_H * MINI_ZOOM)
-    // 그리드
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.5
-    for (let x = 0; x <= MINI_W; x++) { ctx.beginPath(); ctx.moveTo(x * MINI_ZOOM, 0); ctx.lineTo(x * MINI_ZOOM, MINI_H * MINI_ZOOM); ctx.stroke() }
-    for (let y = 0; y <= MINI_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * MINI_ZOOM); ctx.lineTo(MINI_W * MINI_ZOOM, y * MINI_ZOOM); ctx.stroke() }
-    // dataURL 출력
-    const off2 = document.createElement('canvas'); off2.width = MINI_W; off2.height = MINI_H
+    ctx.drawImage(off, 0, 0, W * zoom, H * zoom)
+    if (zoom >= 4) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 0.5
+      for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(x*zoom,0); ctx.lineTo(x*zoom,H*zoom); ctx.stroke() }
+      for (let y = 0; y <= H; y++) { ctx.beginPath(); ctx.moveTo(0,y*zoom); ctx.lineTo(W*zoom,y*zoom); ctx.stroke() }
+    }
+    const off2 = document.createElement('canvas'); off2.width = W; off2.height = H
     off2.getContext('2d')!.putImageData(id, 0, 0)
     const hasPixel = rgba.some((v, i) => i % 4 === 3 && v > 0)
     onDataURL(hasPixel ? off2.toDataURL('image/png') : null)
-  }, [rgba])
+  }, [rgba, size, zoom])
 
   function applyPixel(ex: number, ey: number) {
     const canvas = canvasRef.current; if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const px = Math.floor((ex - rect.left) / MINI_ZOOM)
-    const py = Math.floor((ey - rect.top) / MINI_ZOOM)
-    if (px < 0 || py < 0 || px >= MINI_W || py >= MINI_H) return
+    const scaleX = (size * zoom) / rect.width
+    const scaleY = (size * zoom) / rect.height
+    const px = Math.floor((ex - rect.left) * scaleX / zoom)
+    const py = Math.floor((ey - rect.top)  * scaleY / zoom)
+    if (px < 0 || py < 0 || px >= size || py >= size) return
     const next = new Uint8ClampedArray(rgba)
-    const i = (py * MINI_W + px) * 4
+    const i = (py * size + px) * 4
     if (tool === 'eraser') {
       next[i] = next[i+1] = next[i+2] = next[i+3] = 0
     } else {
-      const r = parseInt(color.slice(1,3),16)
-      const g = parseInt(color.slice(3,5),16)
-      const b = parseInt(color.slice(5,7),16)
-      next[i]=r; next[i+1]=g; next[i+2]=b; next[i+3]=alpha
+      next[i]   = parseInt(color.slice(1,3), 16)
+      next[i+1] = parseInt(color.slice(3,5), 16)
+      next[i+2] = parseInt(color.slice(5,7), 16)
+      next[i+3] = alpha
     }
     setRgba(next)
   }
 
-  function clear() { setRgba(new Uint8ClampedArray(MINI_W * MINI_H * 4)) }
+  function clear() { setRgba(new Uint8ClampedArray(size * size * 4)) }
 
   return (
     <div className="flex flex-col gap-2">
-      {/* 도구 모음 */}
       <div className="flex items-center gap-2 flex-wrap">
         {(['pencil','eraser'] as const).map(t => (
           <button key={t} onClick={() => setTool(t)}
@@ -347,7 +356,7 @@ function MiniPixelEditor({ onDataURL }: { onDataURL: (url: string | null) => voi
           </button>
         ))}
         <input type="color" value={color} onChange={e => setColor(e.target.value)}
-          className="w-7 h-7 rounded cursor-pointer border border-mc-border bg-transparent p-0.5" title="색상" />
+          className="w-7 h-7 rounded cursor-pointer border border-mc-border bg-transparent p-0.5" />
         <div className="flex items-center gap-1 flex-1">
           <span className="text-mc-text-muted text-xs shrink-0">투명도</span>
           <input type="range" min={0} max={255} value={alpha} onChange={e => setAlpha(+e.target.value)}
@@ -355,12 +364,11 @@ function MiniPixelEditor({ onDataURL }: { onDataURL: (url: string | null) => voi
         </div>
         <button onClick={clear} className="px-2 py-1 rounded text-xs border border-mc-border text-mc-danger hover:bg-mc-bg-hover">초기화</button>
       </div>
-      {/* 픽셀 캔버스 */}
       <canvas
         ref={canvasRef}
-        width={MINI_W * MINI_ZOOM}
-        height={MINI_H * MINI_ZOOM}
-        style={{ imageRendering: 'pixelated', cursor: tool === 'eraser' ? 'cell' : 'crosshair', border: '1px solid #444', borderRadius: 4 }}
+        width={size * zoom}
+        height={size * zoom}
+        style={{ imageRendering: 'pixelated', cursor: tool === 'eraser' ? 'cell' : 'crosshair', border: '1px solid #444', borderRadius: 4, maxWidth: CANVAS_PX, maxHeight: CANVAS_PX }}
         onMouseDown={e => { setDown(true); applyPixel(e.clientX, e.clientY) }}
         onMouseMove={e => { if (down) applyPixel(e.clientX, e.clientY) }}
         onMouseUp={() => setDown(false)}
@@ -378,18 +386,21 @@ function AddItemModal({ onAdd, onClose }: {
   const [label,      setLabel]      = useState('')
   const [pathSuffix, setPathSuffix] = useState('')
   const [mode,       setMode]       = useState<'draw' | 'upload'>('draw')
+  const [drawSize,   setDrawSize]   = useState(16)
   const [drawnURL,   setDrawnURL]   = useState<string | null>(null)
   const [uploadURL,  setUploadURL]  = useState<string | null>(null)
+  const [uploadSize, setUploadSize] = useState<{ w: number; h: number }>({ w: 16, h: 16 })
   const [imgError,   setImgError]   = useState<string | null>(null)
   const [dragging,   setDragging]   = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const activeURL  = mode === 'draw' ? drawnURL : uploadURL
+  const activeSize = mode === 'draw' ? { w: drawSize, h: drawSize } : uploadSize
   const autoSuffix = label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'my_item'
   const usedSuffix = pathSuffix.trim() || autoSuffix
   const fullPath   = `assets/minecraft/textures/item/${usedSuffix.replace(/\.png$/i, '')}.png`
 
-  async function handleFile(file: File) {
+  function handleFile(file: File) {
     setImgError(null)
     if (file.type !== 'image/png') { setImgError('PNG 파일만 가능합니다.'); return }
     if (file.size > 4 * 1024 * 1024) { setImgError('4MB 이하 파일만 가능합니다.'); return }
@@ -399,10 +410,8 @@ function AddItemModal({ onAdd, onClose }: {
       const img = new Image()
       img.onload = () => {
         const { naturalWidth: w, naturalHeight: h } = img
-        if (w <= 0 || h <= 0 || (w & (w-1)) || (h & (h-1))) {
-          setImgError(`크기가 2의 거듭제곱이어야 합니다 (16×16, 32×32 등). 현재: ${w}×${h}`); return
-        }
         setUploadURL(url)
+        setUploadSize({ w, h })
         if (!pathSuffix.trim()) setPathSuffix(file.name.replace(/\.png$/i, ''))
         if (!label.trim())      setLabel(file.name.replace(/\.png$/i, '').replace(/_/g, ' '))
       }
@@ -416,7 +425,7 @@ function AddItemModal({ onAdd, onClose }: {
     onAdd(
       { id: `custom_item_${Date.now()}`, label: label.trim(), path: fullPath },
       activeURL,
-      MINI_W, MINI_H,
+      activeSize.w, activeSize.h,
     )
     onClose()
   }
@@ -444,17 +453,31 @@ function AddItemModal({ onAdd, onClose }: {
 
           {/* 본문 */}
           {mode === 'draw' ? (
-            <div className="flex gap-4">
-              {/* 미니 픽셀 에디터 */}
-              <MiniPixelEditor onDataURL={setDrawnURL} />
-              {/* 실시간 3D 미리보기 */}
-              <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                <span className="text-mc-text-muted text-xs">3D 미리보기</span>
-                <div className="flex items-center justify-center rounded-lg"
-                  style={{ width: 160, height: 120, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #08101a 100%)', border: '1px solid #333' }}>
-                  <Item3D dataURL={drawnURL} canvasW={154} canvasH={110} />
+            <div className="flex flex-col gap-2">
+              {/* 크기 선택 */}
+              <div className="flex items-center gap-2">
+                <span className="text-mc-text-muted text-xs shrink-0">텍스처 크기</span>
+                <div className="flex gap-1">
+                  {MINI_SIZES.map(s => (
+                    <button key={s} onClick={() => setDrawSize(s)}
+                      className={`px-2 py-0.5 rounded text-xs border transition-colors ${drawSize===s ? 'border-mc-accent text-mc-accent bg-mc-accent/10' : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'}`}>
+                      {s}×{s}
+                    </button>
+                  ))}
                 </div>
-                {!drawnURL && <p className="text-mc-text-muted text-xs opacity-50 text-center">픽셀을 그리면<br/>여기 3D로 보입니다</p>}
+              </div>
+              <div className="flex gap-4">
+                {/* 미니 픽셀 에디터 */}
+                <MiniPixelEditor size={drawSize} onDataURL={setDrawnURL} />
+                {/* 실시간 3D 미리보기 */}
+                <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                  <span className="text-mc-text-muted text-xs">3D 미리보기</span>
+                  <div className="flex items-center justify-center rounded-lg"
+                    style={{ width: 160, height: 120, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #08101a 100%)', border: '1px solid #333' }}>
+                    <Item3D dataURL={drawnURL} canvasW={154} canvasH={110} />
+                  </div>
+                  {!drawnURL && <p className="text-mc-text-muted text-xs opacity-50 text-center">픽셀을 그리면<br/>여기 3D로 보입니다</p>}
+                </div>
               </div>
             </div>
           ) : (
