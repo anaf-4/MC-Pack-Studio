@@ -16,110 +16,143 @@ function saveCustomItems(items: CustomItem[]) {
   localStorage.setItem('mc_custom_items', JSON.stringify(items))
 }
 
-// ── 아이소메트릭 3D 아이템 렌더러 (Canvas) ────────────────────────────────────
-function Item3D({ dataURL, size = 80 }: { dataURL: string | null; size?: number }) {
+// ── 아이소메트릭 3D 렌더 (공용) ──────────────────────────────────────────────
+function drawIsometric(
+  ctx: CanvasRenderingContext2D,
+  data: Uint8ClampedArray,
+  W: number, H: number,
+  canvasW: number, canvasH: number,
+) {
+  const DR = 0.45
+  const sFromW = (canvasW - 8) / ((W + H) / 2)
+  const sFromH = (canvasH - 8) / ((W + H) / 4 + DR)
+  const s = Math.min(sFromW, sFromH)
+  const d = s * DR
+
+  const renderW = (W + H) * s / 2
+  const renderH = (W + H) * s / 4 + d
+  const originX = (canvasW - renderW) / 2 + H * s / 2
+  const originY = (canvasH - renderH) / 2 + s / 4
+
+  const pixels: [number, number][] = []
+  for (let row = 0; row < H; row++)
+    for (let col = 0; col < W; col++)
+      if (data[(row * W + col) * 4 + 3] > 8) pixels.push([col, row])
+  pixels.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]) || a[1] - b[1])
+
+  for (const [col, row] of pixels) {
+    const i = (row * W + col) * 4
+    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3] / 255
+    const cx = originX + (col - row) * (s / 2)
+    const cy = originY + (col + row) * (s / 4)
+    const c = (br: number) => `rgba(${Math.round(r * br)},${Math.round(g * br)},${Math.round(b * br)},${a})`
+
+    // 왼쪽 면 (중간 밝기)
+    ctx.fillStyle = c(0.72)
+    ctx.beginPath()
+    ctx.moveTo(cx, cy + s / 4); ctx.lineTo(cx - s / 2, cy)
+    ctx.lineTo(cx - s / 2, cy + d); ctx.lineTo(cx, cy + s / 4 + d)
+    ctx.closePath(); ctx.fill()
+
+    // 오른쪽 면 (어두운)
+    ctx.fillStyle = c(0.52)
+    ctx.beginPath()
+    ctx.moveTo(cx + s / 2, cy); ctx.lineTo(cx, cy + s / 4)
+    ctx.lineTo(cx, cy + s / 4 + d); ctx.lineTo(cx + s / 2, cy + d)
+    ctx.closePath(); ctx.fill()
+
+    // 윗면 (가장 밝음)
+    ctx.fillStyle = c(1.0)
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - s / 4); ctx.lineTo(cx + s / 2, cy)
+    ctx.lineTo(cx, cy + s / 4); ctx.lineTo(cx - s / 2, cy)
+    ctx.closePath(); ctx.fill()
+  }
+}
+
+function usePixelData(dataURL: string | null) {
+  const [pixels, setPixels] = useState<{ data: Uint8ClampedArray; W: number; H: number } | null>(null)
+  useEffect(() => {
+    if (!dataURL) { setPixels(null); return }
+    const img = new Image()
+    img.onload = () => {
+      const off = document.createElement('canvas')
+      off.width = img.naturalWidth; off.height = img.naturalHeight
+      const offCtx = off.getContext('2d')!
+      offCtx.drawImage(img, 0, 0)
+      setPixels({ data: offCtx.getImageData(0, 0, off.width, off.height).data, W: off.width, H: off.height })
+    }
+    img.src = dataURL
+  }, [dataURL])
+  return pixels
+}
+
+// ── 상세 패널용 3D (고정 캔버스 크기) ───────────────────────────────────────
+function Item3D({ dataURL, canvasW = 196, canvasH = 120 }: {
+  dataURL: string | null; canvasW?: number; canvasH?: number
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const px = usePixelData(dataURL)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-
-    if (!dataURL) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      return
-    }
-
-    const img = new Image()
-    img.onload = () => {
-      const W = img.naturalWidth
-      const H = img.naturalHeight
-
-      // 픽셀 데이터 읽기
-      const off = document.createElement('canvas')
-      off.width = W; off.height = H
-      const offCtx = off.getContext('2d')!
-      offCtx.drawImage(img, 0, 0)
-      const { data } = offCtx.getImageData(0, 0, W, H)
-
-      // 타일 크기: size에 맞게 조정
-      const s = (size / Math.max(W, H)) * 2
-      const d = Math.max(1.5, s * 0.45)   // 돌출 깊이
-
-      const cw = Math.ceil((W + H) * s + 4)
-      const ch = Math.ceil((W + H) * s / 2 + d + 4)
-      canvas.width  = cw
-      canvas.height = ch
-      ctx.clearRect(0, 0, cw, ch)
-
-      // 이소메트릭 원점: col=0,row=0 픽셀의 top꼭짓점이 좌측 상단에 위치
-      const originX = H * s / 2 + 2
-      const originY = 2 + s / 4
-
-      // 화가 알고리즘: col+row 오름차순 (먼 픽셀 먼저)
-      const pixels: [number, number][] = []
-      for (let row = 0; row < H; row++) {
-        for (let col = 0; col < W; col++) {
-          if (data[(row * W + col) * 4 + 3] > 8) pixels.push([col, row])
-        }
-      }
-      pixels.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]) || a[1] - b[1])
-
-      for (const [col, row] of pixels) {
-        const i = (row * W + col) * 4
-        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3] / 255
-
-        const cx = originX + (col - row) * (s / 2)
-        const cy = originY + (col + row) * (s / 4)
-
-        const top   = (br: number) => `rgba(${Math.round(r*br)},${Math.round(g*br)},${Math.round(b*br)},${a})`
-
-        // 왼쪽 면 (중간 밝기)
-        ctx.fillStyle = top(0.72)
-        ctx.beginPath()
-        ctx.moveTo(cx,       cy + s / 4)
-        ctx.lineTo(cx - s/2, cy)
-        ctx.lineTo(cx - s/2, cy + d)
-        ctx.lineTo(cx,       cy + s / 4 + d)
-        ctx.closePath()
-        ctx.fill()
-
-        // 오른쪽 면 (어두운)
-        ctx.fillStyle = top(0.52)
-        ctx.beginPath()
-        ctx.moveTo(cx + s/2, cy)
-        ctx.lineTo(cx,       cy + s / 4)
-        ctx.lineTo(cx,       cy + s / 4 + d)
-        ctx.lineTo(cx + s/2, cy + d)
-        ctx.closePath()
-        ctx.fill()
-
-        // 윗면 (가장 밝음)
-        ctx.fillStyle = top(1.0)
-        ctx.beginPath()
-        ctx.moveTo(cx,       cy - s / 4)
-        ctx.lineTo(cx + s/2, cy)
-        ctx.lineTo(cx,       cy + s / 4)
-        ctx.lineTo(cx - s/2, cy)
-        ctx.closePath()
-        ctx.fill()
-      }
-    }
-    img.src = dataURL
-  }, [dataURL, size])
+    ctx.clearRect(0, 0, canvasW, canvasH)
+    if (px) drawIsometric(ctx, px.data, px.W, px.H, canvasW, canvasH)
+  }, [px, canvasW, canvasH])
 
   if (!dataURL) return (
-    <div style={{ width: size * 1.8, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
-      <span style={{ fontSize: size * 0.5 }}>?</span>
+    <div style={{ width: canvasW, height: canvasH, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
+      <span style={{ fontSize: 32 }}>?</span>
     </div>
   )
   return (
-    <canvas
-      ref={canvasRef}
-      width={size * 1.8}
-      height={size}
-      style={{ imageRendering: 'pixelated', filter: 'drop-shadow(2px 4px 6px rgba(0,0,0,0.8))' }}
-    />
+    <canvas ref={canvasRef} width={canvasW} height={canvasH}
+      style={{ imageRendering: 'pixelated', filter: 'drop-shadow(2px 4px 8px rgba(0,0,0,0.9))' }} />
+  )
+}
+
+// ── 그리드용 3D 슬롯 (소형) ──────────────────────────────────────────────────
+function Item3DSlot({ dataURL, vanillaURL, label, selected, onClick }: {
+  dataURL: string | null; vanillaURL: string | null
+  label: string; selected: boolean; onClick: () => void
+}) {
+  const displayURL = dataURL ?? vanillaURL
+  const canvasRef  = useRef<HTMLCanvasElement>(null)
+  const px = usePixelData(displayURL)
+  const CW = 72, CH = 48
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, CW, CH)
+    if (px) drawIsometric(ctx, px.data, px.W, px.H, CW, CH)
+  }, [px])
+
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={`flex flex-col items-center justify-center gap-0.5 p-1 rounded transition-all ${
+        selected ? 'ring-2 ring-mc-accent bg-mc-accent/10' : 'hover:bg-mc-bg-hover'
+      }`}
+      style={{ width: 84, minHeight: 72 }}
+    >
+      <div style={{ width: CW, height: CH, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {displayURL
+          ? <canvas ref={canvasRef} width={CW} height={CH}
+              style={{ imageRendering: 'pixelated', opacity: dataURL ? 1 : 0.4 }} />
+          : <div style={{ width: 32, height: 32, opacity: 0.1, background: '#fff', borderRadius: 2 }} />
+        }
+      </div>
+      <span className="text-mc-text-muted truncate w-full text-center leading-tight"
+        style={{ fontSize: 9, color: dataURL ? '#aaffaa' : undefined }}>
+        {label}
+      </span>
+      {dataURL && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#55FF55' }} />}
+    </button>
   )
 }
 
@@ -147,12 +180,15 @@ function ItemSlot({ dataURL, vanillaURL, label, selected, onClick }: {
   )
 }
 
-// ── 아이템 슬롯 (vanilla 훅 포함) ────────────────────────────────────────────
-function ItemSlotWithVanilla({ path, label, selected, onClick }: {
-  path: string; label: string; selected: boolean; onClick: () => void
+// ── 아이템 슬롯 (vanilla 훅 포함, 뷰 모드 분기) ──────────────────────────────
+function ItemSlotWithVanilla({ path, label, selected, onClick, view3D }: {
+  path: string; label: string; selected: boolean; onClick: () => void; view3D: boolean
 }) {
   const dataURL    = useTextureStore(s => s.textures[path]?.dataURL ?? null)
   const vanillaURL = useVanillaTexture(path)
+  if (view3D) return (
+    <Item3DSlot dataURL={dataURL} vanillaURL={vanillaURL} label={label} selected={selected} onClick={onClick} />
+  )
   return <ItemSlot dataURL={dataURL} vanillaURL={vanillaURL} label={label} selected={selected} onClick={onClick} />
 }
 
@@ -172,9 +208,9 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
   return (
     <div className="w-56 flex-shrink-0 border-l border-mc-border flex flex-col">
       <div className="flex items-center justify-center" style={{
-        height: 160, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #0a0f1a 100%)', borderBottom: '1px solid #333'
+        height: 150, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #0a0f1a 100%)', borderBottom: '1px solid #333'
       }}>
-        <Item3D dataURL={displayURL} size={78} />
+        <Item3D dataURL={displayURL} canvasW={196} canvasH={120} />
       </div>
 
       <div className="p-3 flex flex-col gap-2 flex-1 overflow-y-auto">
@@ -306,6 +342,8 @@ export function ItemPreview() {
   const [showCustomOnly, setShowCustomOnly] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
 
+  const [view3D, setView3D] = useState(false)
+
   const allItems = [
     ...builtInItems.map(i => ({ id: i.path, label: i.label, path: i.path, builtIn: true })),
     ...customItems.map(i => ({ ...i, builtIn: false })),
@@ -345,6 +383,11 @@ export function ItemPreview() {
           className={`px-2 py-1 rounded text-xs border transition-colors shrink-0 ${showCustomOnly ? 'border-mc-accent text-mc-accent bg-mc-accent/10' : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'}`}>
           커스텀만
         </button>
+        <button onClick={() => setView3D(v => !v)}
+          title={view3D ? '2D 그리드로 전환' : '3D 뷰로 전환'}
+          className={`px-2 py-1 rounded text-xs border transition-colors shrink-0 ${view3D ? 'border-mc-accent text-mc-accent bg-mc-accent/10' : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'}`}>
+          {view3D ? '3D ✓' : '3D'}
+        </button>
         <button onClick={() => setShowAddModal(true)}
           className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-mc-accent text-mc-accent hover:bg-mc-accent/10 transition-colors font-medium shrink-0">
           + 추가
@@ -352,23 +395,41 @@ export function ItemPreview() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* 인벤토리 그리드 */}
+        {/* 아이템 그리드 */}
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="inline-flex flex-wrap gap-0.5 p-3 rounded"
-            style={{ background: '#c6c6c6', border: '2px solid #555', boxShadow: '2px 2px 0 #000' }}>
-            {filtered.map(item => (
-              <ItemSlotWithVanilla
-                key={item.path}
-                path={item.path}
-                label={item.label}
-                selected={selected === item.path}
-                onClick={() => setSelected(selected === item.path ? null : item.path)}
-              />
-            ))}
-            {Array.from({ length: (9 - (filtered.length % 9)) % 9 }).map((_, i) => (
-              <ItemSlot key={`empty-${i}`} dataURL={null} vanillaURL={null} label="" selected={false} onClick={() => {}} />
-            ))}
-          </div>
+          {view3D ? (
+            // 3D 뷰
+            <div className="flex flex-wrap gap-2">
+              {filtered.map(item => (
+                <ItemSlotWithVanilla
+                  key={item.path}
+                  path={item.path}
+                  label={item.label}
+                  selected={selected === item.path}
+                  onClick={() => setSelected(selected === item.path ? null : item.path)}
+                  view3D
+                />
+              ))}
+            </div>
+          ) : (
+            // 2D 인벤토리 그리드
+            <div className="inline-flex flex-wrap gap-0.5 p-3 rounded"
+              style={{ background: '#c6c6c6', border: '2px solid #555', boxShadow: '2px 2px 0 #000' }}>
+              {filtered.map(item => (
+                <ItemSlotWithVanilla
+                  key={item.path}
+                  path={item.path}
+                  label={item.label}
+                  selected={selected === item.path}
+                  onClick={() => setSelected(selected === item.path ? null : item.path)}
+                  view3D={false}
+                />
+              ))}
+              {Array.from({ length: (9 - (filtered.length % 9)) % 9 }).map((_, i) => (
+                <ItemSlot key={`empty-${i}`} dataURL={null} vanillaURL={null} label="" selected={false} onClick={() => {}} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 선택된 아이템 상세 */}
