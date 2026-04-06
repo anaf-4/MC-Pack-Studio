@@ -76,9 +76,11 @@ export function PixelEditor() {
   const setTexture = useTextureStore((s) => s.setTexture)
   const info = editingPath ? getTextureByPath(editingPath) : undefined
 
-  const existing = editingPath ? textures[editingPath] : undefined
-  const W = existing?.width  ?? info?.defaultWidth  ?? 16
-  const H = existing?.height ?? info?.defaultHeight ?? 16
+  // 실제 캔버스 크기 (이미지 로드 후 결정)
+  const [canvasW, setCanvasW] = useState(info?.defaultWidth  ?? 16)
+  const [canvasH, setCanvasH] = useState(info?.defaultHeight ?? 16)
+  const W = canvasW
+  const H = canvasH
 
   // 오프스크린 캔버스 (실제 픽셀 데이터)
   const offRef  = useRef<HTMLCanvasElement>(null)
@@ -105,20 +107,36 @@ export function PixelEditor() {
   useEffect(() => {
     const off = offRef.current
     if (!off) return
-    off.width  = W
-    off.height = H
-    const ctx = off.getContext('2d')!
-    ctx.clearRect(0, 0, W, H)
 
     const existingTex = editingPath ? textures[editingPath] : null
     if (existingTex) {
       const img = new Image()
       img.onload = () => {
-        ctx.drawImage(img, 0, 0, W, H)
+        // 실제 이미지 크기를 읽어 캔버스 크기 결정 (최대 64×64)
+        const iw = Math.min(img.naturalWidth,  64)
+        const ih = Math.min(img.naturalHeight, 64)
+        off.width  = iw
+        off.height = ih
+        const ctx = off.getContext('2d')!
+        ctx.clearRect(0, 0, iw, ih)
+        ctx.drawImage(img, 0, 0, iw, ih)
+        setCanvasW(iw)
+        setCanvasH(ih)
+        // 크기에 맞게 초기 줌 조정
+        setZoom(iw <= 16 ? 16 : iw <= 32 ? 10 : 6)
         renderDisplay()
       }
       img.src = existingTex.dataURL
     } else {
+      const dw = info?.defaultWidth  ?? 16
+      const dh = info?.defaultHeight ?? 16
+      off.width  = dw
+      off.height = dh
+      const ctx = off.getContext('2d')!
+      ctx.clearRect(0, 0, dw, dh)
+      setCanvasW(dw)
+      setCanvasH(dh)
+      setZoom(dw <= 16 ? 16 : dw <= 32 ? 10 : 6)
       renderDisplay()
     }
     setUndoStack([])
