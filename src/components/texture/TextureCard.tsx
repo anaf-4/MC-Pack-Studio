@@ -3,6 +3,7 @@ import { useTextureStore } from '@/store/textureStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import { TextureDropZone } from './TextureDropZone'
+import { downloadTexture } from '@/utils/downloadTexture'
 import type { TexturePathInfo } from '@/types/texture'
 
 interface Props {
@@ -60,13 +61,18 @@ export function TextureCard({ info }: Props) {
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <TextureDropZone texturePath={info.path} compact onSuccess={() => setShowDrop(false)} />
         {isModified && (
-          <button
-            onClick={() => removeTexture(info.path)}
-            className="text-xs text-mc-danger hover:text-red-400 border border-mc-border rounded px-1.5 py-1 transition-colors"
-            title="Remove custom texture"
-          >
-            ✕
-          </button>
+          <>
+            <button
+              onClick={() => downloadTexture(texture!.dataURL, info.path)}
+              className="text-xs text-mc-text-muted hover:text-mc-accent border border-mc-border rounded px-1.5 py-1 transition-colors"
+              title="PNG로 저장"
+            >⬇</button>
+            <button
+              onClick={() => removeTexture(info.path)}
+              className="text-xs text-mc-danger hover:text-red-400 border border-mc-border rounded px-1.5 py-1 transition-colors"
+              title="Remove custom texture"
+            >✕</button>
+          </>
         )}
       </div>
 

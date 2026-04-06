@@ -4,6 +4,7 @@ import { useEditorStore } from '@/store/editorStore'
 import { useTextureUpload } from '@/hooks/useTextureUpload'
 import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import { getTexturesByCategory } from '@/constants/texturePaths'
+import { downloadTexture } from '@/utils/downloadTexture'
 import type { CSSProperties } from 'react'
 
 // ── 커스텀 아이템 스토어 ──────────────────────────────────────────────────────
@@ -109,6 +110,10 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
         {dataURL ? (
           <div className="flex flex-col gap-1.5">
             <span className="text-mc-accent text-xs">● 커스텀 텍스처 적용됨</span>
+            <button
+              onClick={() => downloadTexture(dataURL, path)}
+              className="w-full text-xs border border-mc-border rounded px-2 py-1.5 text-mc-text-secondary hover:text-mc-accent hover:border-mc-accent transition-colors text-center"
+            >⬇ PNG 저장</button>
             <div className="flex gap-1">
               <button onClick={() => { inputRef.current && (inputRef.current.value = '', inputRef.current.click()) }}
                 disabled={uploading}

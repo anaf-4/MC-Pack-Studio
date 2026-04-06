@@ -2,6 +2,7 @@ import { useRef, useMemo, useState } from 'react'
 import { useTextureStore } from '@/store/textureStore'
 import { useTextureUpload } from '@/hooks/useTextureUpload'
 import { getTexturesByCategory } from '@/constants/texturePaths'
+import { downloadTexture } from '@/utils/downloadTexture'
 import type { CSSProperties } from 'react'
 
 // ── 블록 정의 ─────────────────────────────────────────────────────────────────
@@ -267,9 +268,19 @@ function FaceSlot({ faceLabel, texturePath, dataURL, currentBlockLabel, shareMap
           </div>
         )}
       </div>
-      <span style={{ fontSize: 9 }} className={error ? 'text-mc-danger' : isShared && isModified ? 'text-mc-warning' : 'text-mc-text-muted'}>
-        {error ? '오류' : isShared ? '공유됨' : isModified ? '적용됨' : '클릭'}
-      </span>
+      <div className="flex items-center gap-1">
+        <span style={{ fontSize: 9 }} className={error ? 'text-mc-danger' : isShared && isModified ? 'text-mc-warning' : 'text-mc-text-muted'}>
+          {error ? '오류' : isShared ? '공유됨' : isModified ? '적용됨' : '클릭'}
+        </span>
+        {isModified && (
+          <button
+            onClick={e => { e.stopPropagation(); downloadTexture(dataURL!, texturePath) }}
+            title="PNG 저장"
+            style={{ fontSize: 9, lineHeight: 1, padding: '1px 3px', borderRadius: 2, border: '1px solid #444', color: '#aaa', cursor: 'pointer', background: 'transparent' }}
+            className="hover:text-mc-accent hover:border-mc-accent transition-colors"
+          >⬇</button>
+        )}
+      </div>
       <input ref={inputRef} type="file" accept="image/png" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
     </div>

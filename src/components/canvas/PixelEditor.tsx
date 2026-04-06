@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useTextureStore } from '@/store/textureStore'
 import { useEditorStore } from '@/store/editorStore'
 import { getTextureByPath } from '@/constants/texturePaths'
+import { downloadTexture } from '@/utils/downloadTexture'
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 type Tool = 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'line' | 'rect'
@@ -602,6 +603,17 @@ export function PixelEditor() {
         </div>
 
         <div className="w-px h-5 bg-mc-border" />
+
+        {/* PNG 저장 */}
+        <button
+          onClick={() => {
+            const off = offRef.current
+            if (!off || !editingPath) return
+            downloadTexture(off.toDataURL('image/png'), editingPath)
+          }}
+          className="px-2 py-1 rounded text-xs border border-mc-border text-mc-text-secondary hover:text-mc-accent hover:border-mc-accent transition-colors"
+          title="현재 텍스처를 PNG로 저장"
+        >⬇ PNG 저장</button>
 
         {/* 전체 지우기 */}
         <button
