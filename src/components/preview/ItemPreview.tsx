@@ -1,11 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTextureStore } from '@/store/textureStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useTextureUpload } from '@/hooks/useTextureUpload'
 import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import { getTexturesByCategory } from '@/constants/texturePaths'
 import { downloadTexture } from '@/utils/downloadTexture'
-import type { CSSProperties } from 'react'
 
 // ── 커스텀 아이템 스토어 ──────────────────────────────────────────────────────
 interface CustomItem { id: string; label: string; path: string }
@@ -17,26 +16,110 @@ function saveCustomItems(items: CustomItem[]) {
   localStorage.setItem('mc_custom_items', JSON.stringify(items))
 }
 
-// ── 3D 아이템 렌더러 ──────────────────────────────────────────────────────────
-function Item3D({ dataURL, size = 64 }: { dataURL: string | null; size?: number }) {
-  const commonStyle: CSSProperties = {
-    position: 'absolute', width: size, height: size,
-    backgroundImage: dataURL ? `url(${dataURL})` : undefined,
-    backgroundSize: '100% 100%', imageRendering: 'pixelated', backfaceVisibility: 'hidden',
-  }
+// ── 아이소메트릭 3D 아이템 렌더러 (Canvas) ────────────────────────────────────
+function Item3D({ dataURL, size = 80 }: { dataURL: string | null; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+
+    if (!dataURL) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
+
+    const img = new Image()
+    img.onload = () => {
+      const W = img.naturalWidth
+      const H = img.naturalHeight
+
+      // 픽셀 데이터 읽기
+      const off = document.createElement('canvas')
+      off.width = W; off.height = H
+      const offCtx = off.getContext('2d')!
+      offCtx.drawImage(img, 0, 0)
+      const { data } = offCtx.getImageData(0, 0, W, H)
+
+      // 타일 크기: size에 맞게 조정
+      const s = (size / Math.max(W, H)) * 2
+      const d = Math.max(1.5, s * 0.45)   // 돌출 깊이
+
+      const cw = Math.ceil((W + H) * s + 4)
+      const ch = Math.ceil((W + H) * s / 2 + d + 4)
+      canvas.width  = cw
+      canvas.height = ch
+      ctx.clearRect(0, 0, cw, ch)
+
+      // 이소메트릭 원점: col=0,row=0 픽셀의 top꼭짓점이 좌측 상단에 위치
+      const originX = H * s / 2 + 2
+      const originY = 2 + s / 4
+
+      // 화가 알고리즘: col+row 오름차순 (먼 픽셀 먼저)
+      const pixels: [number, number][] = []
+      for (let row = 0; row < H; row++) {
+        for (let col = 0; col < W; col++) {
+          if (data[(row * W + col) * 4 + 3] > 8) pixels.push([col, row])
+        }
+      }
+      pixels.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]) || a[1] - b[1])
+
+      for (const [col, row] of pixels) {
+        const i = (row * W + col) * 4
+        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3] / 255
+
+        const cx = originX + (col - row) * (s / 2)
+        const cy = originY + (col + row) * (s / 4)
+
+        const top   = (br: number) => `rgba(${Math.round(r*br)},${Math.round(g*br)},${Math.round(b*br)},${a})`
+
+        // 왼쪽 면 (중간 밝기)
+        ctx.fillStyle = top(0.72)
+        ctx.beginPath()
+        ctx.moveTo(cx,       cy + s / 4)
+        ctx.lineTo(cx - s/2, cy)
+        ctx.lineTo(cx - s/2, cy + d)
+        ctx.lineTo(cx,       cy + s / 4 + d)
+        ctx.closePath()
+        ctx.fill()
+
+        // 오른쪽 면 (어두운)
+        ctx.fillStyle = top(0.52)
+        ctx.beginPath()
+        ctx.moveTo(cx + s/2, cy)
+        ctx.lineTo(cx,       cy + s / 4)
+        ctx.lineTo(cx,       cy + s / 4 + d)
+        ctx.lineTo(cx + s/2, cy + d)
+        ctx.closePath()
+        ctx.fill()
+
+        // 윗면 (가장 밝음)
+        ctx.fillStyle = top(1.0)
+        ctx.beginPath()
+        ctx.moveTo(cx,       cy - s / 4)
+        ctx.lineTo(cx + s/2, cy)
+        ctx.lineTo(cx,       cy + s / 4)
+        ctx.lineTo(cx - s/2, cy)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+    img.src = dataURL
+  }, [dataURL, size])
+
   if (!dataURL) return (
-    <div style={{ width: size * 1.6, height: size * 1.6, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
-      <span style={{ fontSize: size * 0.5, lineHeight: 1 }}>?</span>
+    <div style={{ width: size * 1.8, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
+      <span style={{ fontSize: size * 0.5 }}>?</span>
     </div>
   )
   return (
-    <div style={{ perspective: 400, width: size * 1.6, height: size * 1.6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: size, height: size, transformStyle: 'preserve-3d',
-        transform: 'rotateX(15deg) rotateY(-20deg) rotateZ(5deg)', filter: 'drop-shadow(4px 6px 8px rgba(0,0,0,0.7))' }}>
-        <div style={{ ...commonStyle, transform: 'translateZ(2px)', filter: 'brightness(1.0)' }} />
-        <div style={{ ...commonStyle, transform: 'translateZ(-2px)', filter: 'brightness(0.6)' }} />
-      </div>
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={size * 1.8}
+      height={size}
+      style={{ imageRendering: 'pixelated', filter: 'drop-shadow(2px 4px 6px rgba(0,0,0,0.8))' }}
+    />
   )
 }
 
@@ -89,9 +172,9 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
   return (
     <div className="w-56 flex-shrink-0 border-l border-mc-border flex flex-col">
       <div className="flex items-center justify-center" style={{
-        height: 160, background: 'radial-gradient(ellipse at center, #2a3a2a 0%, #0d1a0d 100%)', borderBottom: '1px solid #333'
+        height: 160, background: 'radial-gradient(ellipse at center, #1e2d3a 0%, #0a0f1a 100%)', borderBottom: '1px solid #333'
       }}>
-        <Item3D dataURL={displayURL} size={72} />
+        <Item3D dataURL={displayURL} size={78} />
       </div>
 
       <div className="p-3 flex flex-col gap-2 flex-1 overflow-y-auto">
