@@ -5,6 +5,7 @@ import { useTextureUpload } from '@/hooks/useTextureUpload'
 import { useVanillaTexture } from '@/hooks/useVanillaTexture'
 import { getTexturesByCategory } from '@/constants/texturePaths'
 import { downloadTexture } from '@/utils/downloadTexture'
+import { AnimationEditor } from '@/components/animation/AnimationEditor'
 
 // ── 커스텀 아이템 스토어 ──────────────────────────────────────────────────────
 interface CustomItem { id: string; label: string; path: string }
@@ -204,6 +205,7 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
   const displayURL    = dataURL ?? vanillaURL
   const inputRef      = useRef<HTMLInputElement>(null)
   const { upload, uploading, error } = useTextureUpload()
+  const [showAnim, setShowAnim] = useState(false)
 
   return (
     <div className="w-56 flex-shrink-0 border-l border-mc-border flex flex-col">
@@ -261,6 +263,23 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
           </div>
         )}
 
+        {/* 애니메이션 설정 (커스텀 텍스처가 있을 때만) */}
+        {dataURL && (
+          <div className="border-t border-mc-border -mx-3">
+            <button
+              onClick={() => setShowAnim(v => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs text-mc-text-secondary hover:text-mc-text-primary hover:bg-mc-bg-hover transition-colors">
+              <span className="font-semibold">🎬 애니메이션</span>
+              <span className="opacity-60">{showAnim ? '▴' : '▾'}</span>
+            </button>
+            {showAnim && (
+              <div className="border-t border-mc-border">
+                <AnimationEditor texturePath={path} />
+              </div>
+            )}
+          </div>
+        )}
+
         {onDelete && (
           <button onClick={onDelete}
             className="mt-auto text-xs border border-mc-danger rounded px-2 py-1 text-mc-danger hover:bg-mc-bg-hover transition-colors text-center">
@@ -275,26 +294,92 @@ function ItemDetailPanel({ path, label, width, height, onDelete }: {
   )
 }
 
+// ── 프리셋 타입 & 픽셀 생성기 ─────────────────────────────────────────────────
+type PresetId = 'blank' | 'sword' | 'spear' | 'arrow'
+
+function generatePreset(id: PresetId, size: number): Uint8ClampedArray {
+  const buf = new Uint8ClampedArray(size * size * 4)
+  if (id === 'blank') return buf
+
+  const set = (x: number, y: number, r: number, g: number, b: number) => {
+    const xi = Math.max(0, Math.min(size - 1, Math.round(x)))
+    const yi = Math.max(0, Math.min(size - 1, Math.round(y)))
+    const idx = (yi * size + xi) * 4
+    buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = b; buf[idx + 3] = 255
+  }
+
+  // 16×16 기준 좌표 → 실제 크기로 스케일
+  const f = (n: number) => n * (size / 16)
+
+  if (id === 'spear') {
+    // 창끝 (steel, 우상단)
+    set(f(15), f(0),  216, 224, 240)
+    set(f(15), f(1),  172, 184, 204); set(f(14), f(1), 216, 224, 240)
+    set(f(14), f(2),  172, 184, 204); set(f(13), f(2), 216, 224, 240)
+    set(f(13), f(3),  148, 160, 180); set(f(12), f(3), 188, 200, 220)
+    // 자루 (wood, 대각선)
+    for (let row = 4; row <= 13; row++) {
+      set(f(15 - row), f(row), 168, 120, 60)
+      set(f(14 - row), f(row), 124, 84, 32)
+    }
+    // 끝 마감
+    set(f(1), f(14), 100, 64, 20)
+    set(f(0), f(15),  80, 48, 12)
+  }
+
+  if (id === 'sword') {
+    // 검날 (diamond)
+    for (let i = 0; i <= 6; i++) {
+      set(f(14 - i), f(i), 160, 248, 244)
+      set(f(13 - i), f(i),  80, 212, 204)
+    }
+    // 가드 (gold)
+    set(f(7), f(7), 204, 168, 52); set(f(8), f(7), 204, 168, 52)
+    set(f(7), f(8), 204, 168, 52)
+    // 손잡이
+    for (let i = 8; i <= 11; i++) set(f(14 - i), f(i), 140, 84, 36)
+    // 봉 끝
+    set(f(2), f(12), 204, 168, 52); set(f(3), f(12), 204, 168, 52)
+  }
+
+  if (id === 'arrow') {
+    // 화살촉
+    set(f(15), f(0), 224, 224, 232)
+    set(f(14), f(1), 200, 200, 212); set(f(15), f(1), 164, 164, 176)
+    set(f(13), f(2), 200, 200, 212)
+    // 화살대
+    for (let i = 3; i <= 11; i++) set(f(15 - i), f(i), 168, 124, 68)
+    // 깃털
+    set(f(3),  f(12), 216, 88, 88); set(f(2),  f(12), 192, 64, 64)
+    set(f(3),  f(13), 192, 64, 64); set(f(2),  f(13), 168, 44, 44)
+  }
+
+  return buf
+}
+
 // ── 모달 내장 미니 픽셀 에디터 ───────────────────────────────────────────────
 const CANVAS_PX = 224   // 화면상 고정 크기 (px)
 const MINI_SIZES = [8, 16, 32, 64] as const
 
-function MiniPixelEditor({ size, onDataURL }: {
+function MiniPixelEditor({ size, onDataURL, initialRgba }: {
   size: number
   onDataURL: (url: string | null) => void
+  initialRgba?: Uint8ClampedArray
 }) {
   const zoom = Math.max(2, Math.floor(CANVAS_PX / size))
-  const [rgba, setRgba]   = useState<Uint8ClampedArray>(() => new Uint8ClampedArray(size * size * 4))
+  const [rgba, setRgba]   = useState<Uint8ClampedArray>(() =>
+    initialRgba ? new Uint8ClampedArray(initialRgba) : new Uint8ClampedArray(size * size * 4)
+  )
   const [color, setColor] = useState('#55ff55')
   const [alpha, setAlpha] = useState(255)
   const [tool,  setTool]  = useState<'pencil' | 'eraser'>('pencil')
   const [down,  setDown]  = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // 크기가 바뀌면 버퍼 초기화
+  // 크기 or 프리셋이 바뀌면 버퍼 교체
   useEffect(() => {
-    setRgba(new Uint8ClampedArray(size * size * 4))
-  }, [size])
+    setRgba(initialRgba ? new Uint8ClampedArray(initialRgba) : new Uint8ClampedArray(size * size * 4))
+  }, [size, initialRgba])
 
   // 캔버스 렌더
   useEffect(() => {
@@ -394,6 +479,21 @@ function AddItemModal({ onAdd, onClose }: {
   const [dragging,   setDragging]   = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // 프리셋
+  const [presetId,     setPresetId]     = useState<PresetId>('blank')
+  const [presetPixels, setPresetPixels] = useState<Uint8ClampedArray | undefined>(undefined)
+
+  // 드로잉 크기가 바뀌면 프리셋 재생성
+  useEffect(() => {
+    if (presetId !== 'blank') setPresetPixels(generatePreset(presetId, drawSize))
+  }, [drawSize, presetId])
+
+  function applyPreset(id: PresetId) {
+    setPresetId(id)
+    setPresetPixels(id === 'blank' ? undefined : generatePreset(id, drawSize))
+    setDrawnURL(null)
+  }
+
   const activeURL  = mode === 'draw' ? drawnURL : uploadURL
   const activeSize = mode === 'draw' ? { w: drawSize, h: drawSize } : uploadSize
   const autoSuffix = label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'my_item'
@@ -441,6 +541,29 @@ function AddItemModal({ onAdd, onClose }: {
             <button onClick={onClose} className="text-mc-text-muted hover:text-mc-text-secondary text-lg leading-none">✕</button>
           </div>
 
+          {/* 프리셋 선택 */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-mc-text-secondary text-xs font-semibold">프리셋 시작점</span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {([
+                ['blank', '⬜', '빈 캔버스'],
+                ['sword', '⚔️', '검'],
+                ['spear', '🗡', '창'],
+                ['arrow', '🏹', '화살'],
+              ] as [PresetId, string, string][]).map(([id, emoji, name]) => (
+                <button key={id} onClick={() => applyPreset(id)}
+                  className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded border text-xs transition-colors ${
+                    presetId === id
+                      ? 'border-mc-accent bg-mc-accent/10 text-mc-accent'
+                      : 'border-mc-border text-mc-text-muted hover:bg-mc-bg-hover'
+                  }`}>
+                  <span className="text-base leading-none">{emoji}</span>
+                  <span className="font-medium">{name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 모드 탭 */}
           <div className="flex rounded-lg overflow-hidden border border-mc-border">
             {(['draw','upload'] as const).map(m => (
@@ -468,7 +591,7 @@ function AddItemModal({ onAdd, onClose }: {
               </div>
               <div className="flex gap-4">
                 {/* 미니 픽셀 에디터 */}
-                <MiniPixelEditor size={drawSize} onDataURL={setDrawnURL} />
+                <MiniPixelEditor size={drawSize} onDataURL={setDrawnURL} initialRgba={presetPixels} />
                 {/* 실시간 3D 미리보기 */}
                 <div className="flex flex-col items-center gap-2 flex-shrink-0">
                   <span className="text-mc-text-muted text-xs">3D 미리보기</span>

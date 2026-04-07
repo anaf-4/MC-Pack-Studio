@@ -95,6 +95,7 @@ export const TEXTURE_PATHS: TexturePathInfo[] = [
   item('spectral_arrow.png',    '유령 화살'),
   item('tipped_arrow_base.png', '효과 화살'),
   item('trident.png',           '삼지창'),
+  item('spear.png',             '창'),
 
   // 음식
   item('apple.png',             '사과'),
