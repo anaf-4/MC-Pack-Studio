@@ -543,10 +543,10 @@ export const TEXTURE_PATHS: TexturePathInfo[] = [
   gui('container/dispenser.png',      '발사기'),
 
   // ══ HUD ════════════════════════════════════════════════════════════════════
-  hud('hud/health_heart.png',  '체력 하트'),
-  hud('hud/hunger_icon.png',   '배고픔 아이콘'),
-  hud('widgets.png',           '핫바', 256, 256),
-  hud('crosshair.png',         '조준선'),
+  hud('sprites/hud/heart/full.png',  '체력 하트', 9, 9),
+  hud('sprites/hud/food_full.png',   '배고픔 아이콘', 9, 9),
+  hud('sprites/hud/hotbar.png',      '핫바', 182, 22),
+  hud('sprites/hud/crosshair.png',   '조준선', 15, 15),
 ]
 
 export function getTexturesByCategory(category: string): TexturePathInfo[] {

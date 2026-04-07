@@ -33,8 +33,8 @@ export const XP_TOP_Y     = HOTBAR_TOP_Y - 4 - XP_H           // 302
 // Icons:    2px gap above XP bar
 export const ICONS_TOP_Y  = XP_TOP_Y - 2 - ICON_SIZE          // 282
 
-// ── Texture paths ─────────────────────────────────────────────────────────────
-export const HEALTH_TEXTURE_PATH = 'assets/minecraft/textures/gui/hud/health_heart.png'
-export const HUNGER_TEXTURE_PATH = 'assets/minecraft/textures/gui/hud/hunger_icon.png'
-export const HOTBAR_TEXTURE_PATH = 'assets/minecraft/textures/gui/widgets.png'
-export const CROSSHAIR_TEXTURE_PATH = 'assets/minecraft/textures/gui/crosshair.png'
+// ── Texture paths (1.21+ sprites) ────────────────────────────────────────────
+export const HEALTH_TEXTURE_PATH    = 'assets/minecraft/textures/gui/sprites/hud/heart/full.png'
+export const HUNGER_TEXTURE_PATH    = 'assets/minecraft/textures/gui/sprites/hud/food_full.png'
+export const HOTBAR_TEXTURE_PATH    = 'assets/minecraft/textures/gui/sprites/hud/hotbar.png'
+export const CROSSHAIR_TEXTURE_PATH = 'assets/minecraft/textures/gui/sprites/hud/crosshair.png'

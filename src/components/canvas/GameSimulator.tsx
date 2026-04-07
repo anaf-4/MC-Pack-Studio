@@ -105,18 +105,15 @@ export function GameSimulator() {
 
         {/* ── 핫바 ── */}
         {hotbarTex ? (
-          /* 업로드된 widgets.png의 핫바 영역(0,0~182×22)만 2× 스케일로 표시 */
-          <div
-            className="absolute"
+          <img
+            src={hotbarTex}
+            alt="핫바"
             style={{
+              position: 'absolute',
               left: HOTBAR_LEFT_X,
               top: HOTBAR_TOP_Y,
               width: HOTBAR_W,
               height: HOTBAR_H,
-              backgroundImage: `url(${hotbarTex})`,
-              backgroundSize: `${(HOTBAR_W / 182) * 256}px ${(HOTBAR_H / 22) * 256}px`,
-              backgroundPosition: '0 0',
-              backgroundRepeat: 'no-repeat',
               imageRendering: 'pixelated',
             }}
           />
